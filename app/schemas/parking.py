@@ -10,40 +10,45 @@ from ..models.enums import ParkingType, ParkingSlotStatus, VehicleType
 # ==================== Parking Slot Schemas ====================
 
 class ParkingSlotBase(BaseModel):
-    """Base parking slot schema."""
+    """Base parking slot schema - simplified without location fields."""
     slot_label: str = Field(..., min_length=1, max_length=50)
-    cell_row: int = Field(..., ge=0)
-    cell_column: int = Field(..., ge=0)
-    slot_type: ParkingType = ParkingType.EMPLOYEE
-    is_reserved: bool = False
+    parking_type: ParkingType = ParkingType.EMPLOYEE
+    vehicle_type: Optional[VehicleType] = None
+    notes: Optional[str] = Field(None, max_length=500)
 
 
 class ParkingSlotCreate(ParkingSlotBase):
-    """Parking slot creation schema."""
-    floor_plan_id: UUID
+    """
+    Parking slot creation schema - used by PARKING Manager.
+    slot_code is auto-generated in the database.
+    """
+    pass
 
 
 class ParkingSlotUpdate(BaseModel):
     """Parking slot update schema."""
     slot_label: Optional[str] = Field(None, min_length=1, max_length=50)
-    slot_type: Optional[ParkingType] = None
-    is_reserved: Optional[bool] = None
+    parking_type: Optional[ParkingType] = None
+    vehicle_type: Optional[VehicleType] = None
+    status: Optional[ParkingSlotStatus] = None
     is_active: Optional[bool] = None
+    notes: Optional[str] = Field(None, max_length=500)
 
 
 class ParkingSlotResponse(BaseModel):
-    """Parking slot response schema."""
+    """Parking slot response schema with auto-generated slot_code."""
     id: UUID
-    floor_plan_id: UUID
+    slot_code: str  # Auto-generated: PKG-XXXX
     slot_label: str
-    cell_row: int
-    cell_column: int
-    slot_type: ParkingType
+    parking_type: ParkingType
+    vehicle_type: Optional[VehicleType] = None
     status: ParkingSlotStatus
-    is_reserved: bool
     is_active: bool
-    current_allocation: Optional["ParkingAllocationResponse"] = None
+    notes: Optional[str] = None
+    created_by_code: str
     created_at: datetime
+    updated_at: datetime
+    current_allocation: Optional["ParkingAllocationResponse"] = None
     
     class Config:
         from_attributes = True
@@ -62,9 +67,7 @@ class ParkingSlotListResponse(BaseModel):
 class ParkingAllocationBase(BaseModel):
     """
     Base parking allocation schema.
-    
     Available to: EMPLOYEE, TEAM_LEAD, MANAGER roles
-    Managed by: SECURITY admin
     """
     vehicle_number: str = Field(..., min_length=4, max_length=20)
     vehicle_type: VehicleType = VehicleType.CAR
@@ -74,16 +77,13 @@ class ParkingAllocationBase(BaseModel):
 class ParkingAllocationCreate(ParkingAllocationBase):
     """
     Parking allocation creation schema for employees.
-    
     Employee books their own parking.
     """
-    slot_id: UUID  # Reference to ParkingSlot
-    allocation_date: date  # Date for which parking is being booked
+    slot_id: UUID
     
     @field_validator('vehicle_number')
     @classmethod
     def validate_vehicle_number(cls, v):
-        # Basic vehicle number validation
         if not re.match(r'^[A-Z0-9\s-]{4,20}$', v.upper()):
             raise ValueError('Invalid vehicle number format')
         return v.upper()
@@ -91,9 +91,8 @@ class ParkingAllocationCreate(ParkingAllocationBase):
 
 class VisitorParkingCreate(BaseModel):
     """
-    Schema for Security Admin to assign visitor parking.
-    
-    Only SECURITY admin can create visitor parking.
+    Schema for Parking Manager to assign visitor parking.
+    Only PARKING manager can create visitor parking.
     """
     visitor_name: str = Field(..., min_length=2, max_length=100)
     visitor_phone: Optional[str] = Field(None, max_length=20)
@@ -102,8 +101,7 @@ class VisitorParkingCreate(BaseModel):
     vehicle_type: VehicleType = VehicleType.CAR
     notes: Optional[str] = Field(None, max_length=500)
     host_user_code: Optional[str] = Field(None, description="User code of the employee hosting the visitor")
-    # Optional - if not provided, auto-assigns an available visitor slot
-    slot_id: Optional[UUID] = None
+    slot_id: Optional[UUID] = None  # If not provided, auto-assigns an available visitor slot
     
     @field_validator('visitor_phone')
     @classmethod
@@ -130,21 +128,19 @@ class ParkingAllocationResponse(BaseModel):
     """Parking allocation response schema."""
     id: UUID
     slot_id: UUID
-    slot_label: str  # From slot
-    floor_plan_id: UUID  # From slot
-    parking_type: ParkingType  # From slot
+    slot_code: str
+    slot_label: str
+    parking_type: ParkingType
     user_code: Optional[str] = None
     user_name: Optional[str] = None
     visitor_name: Optional[str] = None
     visitor_phone: Optional[str] = None
     visitor_company: Optional[str] = None
-    host_user_code: Optional[str] = None
-    host_user_name: Optional[str] = None
     vehicle_number: Optional[str] = None
     vehicle_type: VehicleType
-    allocation_date: date
-    check_in_time: Optional[datetime] = None
-    check_out_time: Optional[datetime] = None
+    entry_time: datetime
+    expected_exit_time: Optional[datetime] = None
+    exit_time: Optional[datetime] = None
     is_active: bool
     notes: Optional[str] = None
     created_at: datetime
@@ -177,7 +173,7 @@ class ParkingHistoryResponse(BaseModel):
     id: UUID
     allocation_id: UUID
     slot_id: UUID
-    slot_label: str
+    slot_code: str
     parking_type: ParkingType
     user_code: Optional[str] = None
     user_name: Optional[str] = None

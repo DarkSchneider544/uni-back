@@ -1,25 +1,31 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
+from sqlalchemy.orm import selectinload
 from typing import Optional, List, Tuple
 from uuid import UUID
 from datetime import datetime, timezone
-import re
 
-from ..models.parking import ParkingAllocation, ParkingHistory
-from ..models.floor_plan import FloorPlan, FloorPlanVersion
+from ..models.parking import ParkingSlot, ParkingAllocation, ParkingHistory
 from ..models.user import User
-from ..models.enums import CellType, ParkingType, FloorPlanType, UserRole, ManagerType
-from ..schemas.parking import ParkingAllocationCreate, ParkingAllocationUpdate, VisitorParkingCreate
+from ..models.enums import ParkingType, ParkingSlotStatus, UserRole, ManagerType, VehicleType
+from ..schemas.parking import (
+    ParkingSlotCreate, ParkingSlotUpdate,
+    ParkingAllocationCreate, ParkingAllocationUpdate, VisitorParkingCreate
+)
 
 
 class ParkingService:
-    """Parking management service - managed by Parking Manager."""
+    """
+    Parking management service.
+    Managed by PARKING Manager.
+    Simplified without location fields.
+    """
     
     def __init__(self, db: AsyncSession):
         self.db = db
     
     def can_manage_parking(self, user: User) -> bool:
-        """Check if user can manage parking allocations."""
+        """Check if user can manage parking slots."""
         if user.role == UserRole.SUPER_ADMIN:
             return True
         if user.role == UserRole.ADMIN:
@@ -28,84 +34,150 @@ class ParkingService:
             return True
         return False
     
-    async def get_allocation_by_id(
-        self,
-        allocation_id: UUID
-    ) -> Optional[ParkingAllocation]:
-        """Get parking allocation by ID."""
+    # ==================== Parking Slot Management ====================
+    
+    async def get_slot_by_id(self, slot_id: UUID) -> Optional[ParkingSlot]:
+        """Get parking slot by ID."""
         result = await self.db.execute(
-            select(ParkingAllocation).where(ParkingAllocation.id == allocation_id)
+            select(ParkingSlot).where(ParkingSlot.id == slot_id)
         )
         return result.scalar_one_or_none()
     
-    async def get_parking_floor_plans(self) -> List[FloorPlan]:
-        """Get all active parking floor plans."""
+    async def get_slot_by_code(self, slot_code: str) -> Optional[ParkingSlot]:
+        """Get parking slot by code."""
         result = await self.db.execute(
-            select(FloorPlan).where(
+            select(ParkingSlot).where(ParkingSlot.slot_code == slot_code)
+        )
+        return result.scalar_one_or_none()
+    
+    async def list_slots(
+        self,
+        parking_type: Optional[ParkingType] = None,
+        status: Optional[ParkingSlotStatus] = None,
+        is_active: Optional[bool] = True,
+        page: int = 1,
+        page_size: int = 20
+    ) -> Tuple[List[ParkingSlot], int]:
+        """List parking slots with filtering."""
+        query = select(ParkingSlot)
+        count_query = select(func.count(ParkingSlot.id))
+        
+        conditions = []
+        if parking_type:
+            conditions.append(ParkingSlot.parking_type == parking_type)
+        if status:
+            conditions.append(ParkingSlot.status == status)
+        if is_active is not None:
+            conditions.append(ParkingSlot.is_active == is_active)
+        
+        if conditions:
+            query = query.where(and_(*conditions))
+            count_query = count_query.where(and_(*conditions))
+        
+        # Get total count
+        total_result = await self.db.execute(count_query)
+        total = total_result.scalar()
+        
+        # Get paginated results
+        query = query.offset((page - 1) * page_size).limit(page_size)
+        result = await self.db.execute(query)
+        slots = list(result.scalars().all())
+        
+        return slots, total
+    
+    async def create_slot(
+        self,
+        slot_data: ParkingSlotCreate,
+        created_by: User
+    ) -> Tuple[Optional[ParkingSlot], Optional[str]]:
+        """Create a new parking slot - Manager only."""
+        if not self.can_manage_parking(created_by):
+            return None, "Only PARKING Manager can create parking slots"
+        
+        slot = ParkingSlot(
+            slot_label=slot_data.slot_label,
+            parking_type=slot_data.parking_type,
+            vehicle_type=slot_data.vehicle_type,
+            notes=slot_data.notes,
+            created_by_code=created_by.user_code
+        )
+        
+        self.db.add(slot)
+        await self.db.commit()
+        await self.db.refresh(slot)
+        
+        return slot, None
+    
+    async def update_slot(
+        self,
+        slot_id: UUID,
+        slot_data: ParkingSlotUpdate,
+        user: User
+    ) -> Tuple[Optional[ParkingSlot], Optional[str]]:
+        """Update a parking slot - Manager only."""
+        if not self.can_manage_parking(user):
+            return None, "Only PARKING Manager can update parking slots"
+        
+        slot = await self.get_slot_by_id(slot_id)
+        if not slot:
+            return None, "Parking slot not found"
+        
+        update_data = slot_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(slot, field, value)
+        
+        await self.db.commit()
+        await self.db.refresh(slot)
+        
+        return slot, None
+    
+    async def delete_slot(
+        self,
+        slot_id: UUID,
+        user: User
+    ) -> Tuple[bool, Optional[str]]:
+        """Soft delete a parking slot - Manager only."""
+        if not self.can_manage_parking(user):
+            return False, "Only PARKING Manager can delete parking slots"
+        
+        slot = await self.get_slot_by_id(slot_id)
+        if not slot:
+            return False, "Parking slot not found"
+        
+        # Check for active allocations
+        active_allocation = await self.db.execute(
+            select(ParkingAllocation).where(
                 and_(
-                    FloorPlan.plan_type == FloorPlanType.PARKING,
-                    FloorPlan.is_active == True
+                    ParkingAllocation.slot_id == slot_id,
+                    ParkingAllocation.is_active == True
                 )
             )
         )
-        return list(result.scalars().all())
-    
-    async def validate_parking_slot(
-        self,
-        floor_plan_id: UUID,
-        cell_row: str,
-        cell_column: str
-    ) -> Tuple[bool, Optional[str]]:
-        """Validate that the cell is a valid parking slot."""
-        # Validate row and column are numeric
-        if not cell_row.isdigit() or not cell_column.isdigit():
-            return False, "Cell row and column must be numeric"
+        if active_allocation.scalar_one_or_none():
+            return False, "Cannot delete slot with active allocation"
         
-        # Get floor plan first
-        floor_plan_result = await self.db.execute(
-            select(FloorPlan).where(FloorPlan.id == floor_plan_id)
-        )
-        floor_plan = floor_plan_result.scalar_one_or_none()
-        
-        if not floor_plan:
-            return False, "Floor plan not found"
-        
-        if floor_plan.plan_type != FloorPlanType.PARKING:
-            return False, "Floor plan is not a parking layout"
-        
-        # Get latest floor plan version
-        result = await self.db.execute(
-            select(FloorPlanVersion)
-            .where(FloorPlanVersion.floor_plan_id == floor_plan_id)
-            .order_by(FloorPlanVersion.version.desc())
-            .limit(1)
-        )
-        version = result.scalar_one_or_none()
-        
-        if not version:
-            return False, "Floor plan version not found"
-        
-        row_idx = int(cell_row)
-        col_idx = int(cell_column)
-        
-        if row_idx >= len(version.grid_data) or col_idx >= len(version.grid_data[0]):
-            return False, "Cell coordinates out of bounds"
-        
-        cell = version.grid_data[row_idx][col_idx]
-        if cell.get("cell_type") != CellType.PARKING_SLOT.value:
-            return False, "Cell is not a parking slot"
+        slot.is_active = False
+        await self.db.commit()
         
         return True, None
     
-    async def check_user_active_parking(
-        self,
-        user_id: UUID
-    ) -> Optional[ParkingAllocation]:
+    # ==================== Parking Allocation ====================
+    
+    async def get_allocation_by_id(self, allocation_id: UUID) -> Optional[ParkingAllocation]:
+        """Get parking allocation by ID."""
+        result = await self.db.execute(
+            select(ParkingAllocation)
+            .options(selectinload(ParkingAllocation.slot))
+            .where(ParkingAllocation.id == allocation_id)
+        )
+        return result.scalar_one_or_none()
+    
+    async def check_user_active_parking(self, user_code: str) -> Optional[ParkingAllocation]:
         """Check if user has an active parking allocation."""
         result = await self.db.execute(
             select(ParkingAllocation).where(
                 and_(
-                    ParkingAllocation.user_id == user_id,
+                    ParkingAllocation.user_code == user_code,
                     ParkingAllocation.is_active == True,
                     ParkingAllocation.exit_time.is_(None)
                 )
@@ -113,17 +185,12 @@ class ParkingService:
         )
         return result.scalar_one_or_none()
     
-    async def check_slot_availability(
-        self,
-        floor_plan_id: UUID,
-        slot_label: str
-    ) -> bool:
+    async def check_slot_availability(self, slot_id: UUID) -> bool:
         """Check if a parking slot is available."""
         result = await self.db.execute(
             select(ParkingAllocation).where(
                 and_(
-                    ParkingAllocation.floor_plan_id == floor_plan_id,
-                    ParkingAllocation.slot_label == slot_label,
+                    ParkingAllocation.slot_id == slot_id,
                     ParkingAllocation.is_active == True,
                     ParkingAllocation.exit_time.is_(None)
                 )
@@ -133,222 +200,84 @@ class ParkingService:
     
     async def get_available_slots(
         self,
-        floor_plan_id: UUID
-    ) -> List[dict]:
-        """Get all available parking slots on a floor."""
-        # Validate floor plan is a parking type
-        floor_plan_result = await self.db.execute(
-            select(FloorPlan).where(FloorPlan.id == floor_plan_id)
+        parking_type: Optional[ParkingType] = None,
+        vehicle_type: Optional[VehicleType] = None
+    ) -> List[ParkingSlot]:
+        """Get all available parking slots."""
+        # Get all active slots
+        query = select(ParkingSlot).where(
+            and_(
+                ParkingSlot.is_active == True,
+                ParkingSlot.status == ParkingSlotStatus.AVAILABLE
+            )
         )
-        floor_plan = floor_plan_result.scalar_one_or_none()
         
-        if not floor_plan or floor_plan.plan_type != FloorPlanType.PARKING:
-            return []
+        if parking_type:
+            query = query.where(ParkingSlot.parking_type == parking_type)
+        if vehicle_type:
+            query = query.where(
+                (ParkingSlot.vehicle_type == vehicle_type) | (ParkingSlot.vehicle_type.is_(None))
+            )
         
-        # Get latest version grid
-        result = await self.db.execute(
-            select(FloorPlanVersion)
-            .where(FloorPlanVersion.floor_plan_id == floor_plan_id)
-            .order_by(FloorPlanVersion.version.desc())
-            .limit(1)
-        )
-        version = result.scalar_one_or_none()
+        result = await self.db.execute(query)
+        all_slots = list(result.scalars().all())
         
-        if not version:
-            return []
-        
-        # Get all occupied slots
+        # Get occupied slots
         occupied_result = await self.db.execute(
-            select(ParkingAllocation.slot_label).where(
+            select(ParkingAllocation.slot_id).where(
                 and_(
-                    ParkingAllocation.floor_plan_id == floor_plan_id,
                     ParkingAllocation.is_active == True,
                     ParkingAllocation.exit_time.is_(None)
                 )
             )
         )
-        occupied_slots = set(row[0] for row in occupied_result.fetchall())
+        occupied_slot_ids = set(row[0] for row in occupied_result.fetchall())
         
-        # Find available slots from grid
-        available = []
-        for row_idx, row in enumerate(version.grid_data):
-            for col_idx, cell in enumerate(row):
-                if cell.get("cell_type") == CellType.PARKING_SLOT.value:
-                    label = cell.get("label", f"Slot-{row_idx}-{col_idx}")
-                    if label not in occupied_slots:
-                        available.append({
-                            "row": row_idx,
-                            "column": col_idx,
-                            "label": label,
-                            "direction": cell.get("direction")
-                        })
+        # Filter out occupied slots
+        available_slots = [s for s in all_slots if s.id not in occupied_slot_ids]
         
-        return available
-    
-    async def assign_visitor_slot(
-        self,
-        visitor_data: 'VisitorParkingCreate',
-        assigned_by: User
-    ) -> Tuple[Optional[ParkingAllocation], Optional[str]]:
-        """
-        Assign a parking slot to a visitor - Security Admin only.
-        Automatically finds an available slot if not specified.
-        """
-        # Validate permissions
-        if not self.can_manage_parking(assigned_by):
-            return None, "Only Security Admin can assign visitor parking"
-        
-        # Validate visitor information
-        if not visitor_data.visitor_name or len(visitor_data.visitor_name.strip()) < 2:
-            return None, "Visitor name is required (minimum 2 characters)"
-        
-        # Validate phone format if provided
-        if visitor_data.visitor_phone:
-            phone_pattern = r'^\+?[\d\s-]{10,15}$'
-            if not re.match(phone_pattern, visitor_data.visitor_phone):
-                return None, "Invalid phone number format"
-        
-        # Get parking floor plans
-        floor_plans = await self.get_parking_floor_plans()
-        if not floor_plans:
-            return None, "No parking floor plans available"
-        
-        # Find an available slot
-        slot_info = None
-        target_floor_plan = None
-        
-        if visitor_data.floor_plan_id and visitor_data.slot_label:
-            # Specific slot requested
-            target_floor_plan_result = await self.db.execute(
-                select(FloorPlan).where(
-                    and_(
-                        FloorPlan.id == visitor_data.floor_plan_id,
-                        FloorPlan.plan_type == FloorPlanType.PARKING
-                    )
-                )
-            )
-            target_floor_plan = target_floor_plan_result.scalar_one_or_none()
-            
-            if not target_floor_plan:
-                return None, "Invalid parking floor plan"
-            
-            if not await self.check_slot_availability(
-                visitor_data.floor_plan_id, 
-                visitor_data.slot_label
-            ):
-                return None, "Requested slot is not available"
-            
-            # Find slot coordinates from grid
-            version_result = await self.db.execute(
-                select(FloorPlanVersion)
-                .where(FloorPlanVersion.floor_plan_id == visitor_data.floor_plan_id)
-                .order_by(FloorPlanVersion.version.desc())
-                .limit(1)
-            )
-            version = version_result.scalar_one_or_none()
-            
-            if version:
-                for row_idx, row in enumerate(version.grid_data):
-                    for col_idx, cell in enumerate(row):
-                        if cell.get("label") == visitor_data.slot_label:
-                            slot_info = {
-                                "row": row_idx,
-                                "column": col_idx,
-                                "label": visitor_data.slot_label
-                            }
-                            break
-                    if slot_info:
-                        break
-            
-            if not slot_info:
-                return None, "Slot not found in floor plan grid"
-        else:
-            # Auto-assign available slot
-            for fp in floor_plans:
-                available = await self.get_available_slots(fp.id)
-                if available:
-                    slot_info = available[0]  # Take first available
-                    target_floor_plan = fp
-                    break
-            
-            if not slot_info:
-                return None, "No parking slots available"
-        
-        # Create the allocation
-        allocation = ParkingAllocation(
-            floor_plan_id=target_floor_plan.id,
-            slot_label=slot_info["label"],
-            cell_row=str(slot_info["row"]),
-            cell_column=str(slot_info["column"]),
-            parking_type=ParkingType.VISITOR,
-            visitor_name=visitor_data.visitor_name.strip(),
-            visitor_phone=visitor_data.visitor_phone,
-            visitor_company=visitor_data.visitor_company,
-            vehicle_number=visitor_data.vehicle_number,
-            notes=visitor_data.notes,
-            is_active=True,
-            entry_time=datetime.now(timezone.utc)  # Auto-record entry
-        )
-        
-        self.db.add(allocation)
-        await self.db.commit()
-        await self.db.refresh(allocation)
-        
-        return allocation, None
+        return available_slots
     
     async def create_allocation(
         self,
         allocation_data: ParkingAllocationCreate,
-        created_by: User
+        user: User
     ) -> Tuple[Optional[ParkingAllocation], Optional[str]]:
-        """Create a new parking allocation."""
-        # Validate parking slot
-        valid, error = await self.validate_parking_slot(
-            allocation_data.floor_plan_id,
-            allocation_data.cell_row,
-            allocation_data.cell_column
-        )
-        if not valid:
-            return None, error
+        """Create a new parking allocation for employee."""
+        # Check if user already has active parking
+        existing = await self.check_user_active_parking(user.user_code)
+        if existing:
+            return None, "You already have an active parking allocation"
+        
+        # Validate slot exists and is available
+        slot = await self.get_slot_by_id(allocation_data.slot_id)
+        if not slot:
+            return None, "Parking slot not found"
+        if not slot.is_active:
+            return None, "Parking slot is not active"
+        if slot.status == ParkingSlotStatus.MAINTENANCE:
+            return None, "Parking slot is under maintenance"
+        if slot.parking_type != ParkingType.EMPLOYEE:
+            return None, "This slot is not for employees"
         
         # Check slot availability
-        if not await self.check_slot_availability(
-            allocation_data.floor_plan_id,
-            allocation_data.slot_label
-        ):
+        is_available = await self.check_slot_availability(allocation_data.slot_id)
+        if not is_available:
             return None, "Parking slot is already occupied"
         
-        # For employee parking, check if user already has active parking
-        if allocation_data.parking_type == ParkingType.EMPLOYEE:
-            if not allocation_data.user_id:
-                return None, "User ID required for employee parking"
-            
-            existing = await self.check_user_active_parking(allocation_data.user_id)
-            if existing:
-                return None, "User already has an active parking allocation"
-        
-        # For visitor parking, validate visitor info (Security Admin only)
-        if allocation_data.parking_type == ParkingType.VISITOR:
-            if not self.can_manage_parking(created_by):
-                return None, "Only Security Admin can allocate visitor parking"
-            
-            if not allocation_data.visitor_name:
-                return None, "Visitor name required for visitor parking"
-        
         allocation = ParkingAllocation(
-            floor_plan_id=allocation_data.floor_plan_id,
-            slot_label=allocation_data.slot_label,
-            cell_row=allocation_data.cell_row,
-            cell_column=allocation_data.cell_column,
-            parking_type=allocation_data.parking_type,
-            user_id=allocation_data.user_id,
-            visitor_name=allocation_data.visitor_name,
-            visitor_phone=allocation_data.visitor_phone,
-            visitor_company=allocation_data.visitor_company,
+            slot_id=allocation_data.slot_id,
+            user_code=user.user_code,
+            parking_type=ParkingType.EMPLOYEE,
             vehicle_number=allocation_data.vehicle_number,
-            notes=allocation_data.notes,
-            is_active=True
+            vehicle_type=allocation_data.vehicle_type,
+            entry_time=datetime.now(timezone.utc),
+            is_active=True,
+            notes=allocation_data.notes
         )
+        
+        # Update slot status
+        slot.status = ParkingSlotStatus.OCCUPIED
         
         self.db.add(allocation)
         await self.db.commit()
@@ -356,20 +285,55 @@ class ParkingService:
         
         return allocation, None
     
-    async def record_entry(
+    async def assign_visitor_slot(
         self,
-        allocation_id: UUID,
-        timestamp: Optional[datetime] = None
+        visitor_data: VisitorParkingCreate,
+        assigned_by: User
     ) -> Tuple[Optional[ParkingAllocation], Optional[str]]:
-        """Record parking entry time."""
-        allocation = await self.get_allocation_by_id(allocation_id)
-        if not allocation:
-            return None, "Allocation not found"
+        """Assign a parking slot to a visitor - Manager only."""
+        if not self.can_manage_parking(assigned_by):
+            return None, "Only PARKING Manager can assign visitor parking"
         
-        if allocation.entry_time:
-            return None, "Entry already recorded"
+        # Get slot or auto-assign
+        if visitor_data.slot_id:
+            slot = await self.get_slot_by_id(visitor_data.slot_id)
+            if not slot:
+                return None, "Parking slot not found"
+        else:
+            # Auto-assign available visitor slot
+            available = await self.get_available_slots(
+                parking_type=ParkingType.VISITOR,
+                vehicle_type=visitor_data.vehicle_type
+            )
+            if not available:
+                return None, "No visitor parking slots available"
+            slot = available[0]
         
-        allocation.entry_time = timestamp or datetime.now(timezone.utc)
+        if not slot.is_active:
+            return None, "Parking slot is not active"
+        
+        # Check slot availability
+        is_available = await self.check_slot_availability(slot.id)
+        if not is_available:
+            return None, "Parking slot is already occupied"
+        
+        allocation = ParkingAllocation(
+            slot_id=slot.id,
+            parking_type=ParkingType.VISITOR,
+            visitor_name=visitor_data.visitor_name,
+            visitor_phone=visitor_data.visitor_phone,
+            visitor_company=visitor_data.visitor_company,
+            vehicle_number=visitor_data.vehicle_number,
+            vehicle_type=visitor_data.vehicle_type,
+            entry_time=datetime.now(timezone.utc),
+            is_active=True,
+            notes=visitor_data.notes
+        )
+        
+        # Update slot status
+        slot.status = ParkingSlotStatus.OCCUPIED
+        
+        self.db.add(allocation)
         await self.db.commit()
         await self.db.refresh(allocation)
         
@@ -378,48 +342,46 @@ class ParkingService:
     async def record_exit(
         self,
         allocation_id: UUID,
-        recorded_by: User,
-        timestamp: Optional[datetime] = None
+        user: User
     ) -> Tuple[Optional[ParkingAllocation], Optional[str]]:
-        """Record parking exit time and create history."""
+        """Record parking exit."""
         allocation = await self.get_allocation_by_id(allocation_id)
         if not allocation:
             return None, "Allocation not found"
         
-        # For visitor exits, only security admin can record
-        if allocation.parking_type == ParkingType.VISITOR:
-            if not self.can_manage_parking(recorded_by):
-                return None, "Only Security Admin can record visitor exits"
+        if not allocation.is_active:
+            return None, "Allocation is not active"
         
-        if not allocation.entry_time:
-            return None, "No entry recorded"
+        # Check permission - user can release own parking, or manager can release any
+        if allocation.user_code != user.user_code:
+            if not self.can_manage_parking(user):
+                return None, "Cannot release another user's parking"
         
-        if allocation.exit_time:
-            return None, "Exit already recorded"
-        
-        exit_time = timestamp or datetime.now(timezone.utc)
-        allocation.exit_time = exit_time
+        allocation.exit_time = datetime.now(timezone.utc)
         allocation.is_active = False
         
-        # Calculate duration
-        duration = exit_time - allocation.entry_time
-        duration_minutes = int(duration.total_seconds() / 60)
+        # Update slot status
+        slot = await self.get_slot_by_id(allocation.slot_id)
+        if slot:
+            slot.status = ParkingSlotStatus.AVAILABLE
         
         # Create history record
+        duration = (allocation.exit_time - allocation.entry_time).total_seconds() / 60
         history = ParkingHistory(
             allocation_id=allocation.id,
-            floor_plan_id=allocation.floor_plan_id,
-            slot_label=allocation.slot_label,
+            slot_id=allocation.slot_id,
+            slot_code=slot.slot_code if slot else "UNKNOWN",
             parking_type=allocation.parking_type,
-            user_id=allocation.user_id,
+            user_code=allocation.user_code,
             visitor_name=allocation.visitor_name,
             vehicle_number=allocation.vehicle_number,
+            vehicle_type=allocation.vehicle_type,
             entry_time=allocation.entry_time,
-            exit_time=exit_time,
-            duration_minutes=str(duration_minutes)
+            exit_time=allocation.exit_time,
+            duration_minutes=int(duration)
         )
-        self.db.add(history)
         
+        self.db.add(history)
         await self.db.commit()
         await self.db.refresh(allocation)
         
@@ -427,38 +389,42 @@ class ParkingService:
     
     async def list_allocations(
         self,
-        floor_plan_id: Optional[UUID] = None,
+        slot_id: Optional[UUID] = None,
+        user_code: Optional[str] = None,
         parking_type: Optional[ParkingType] = None,
-        is_active: Optional[bool] = None,
+        is_active: Optional[bool] = True,
         page: int = 1,
         page_size: int = 20
     ) -> Tuple[List[ParkingAllocation], int]:
         """List parking allocations with filtering."""
-        query = select(ParkingAllocation)
+        query = select(ParkingAllocation).options(selectinload(ParkingAllocation.slot))
         count_query = select(func.count(ParkingAllocation.id))
         
-        if floor_plan_id:
-            query = query.where(ParkingAllocation.floor_plan_id == floor_plan_id)
-            count_query = count_query.where(ParkingAllocation.floor_plan_id == floor_plan_id)
-        
+        conditions = []
+        if slot_id:
+            conditions.append(ParkingAllocation.slot_id == slot_id)
+        if user_code:
+            conditions.append(ParkingAllocation.user_code == user_code)
         if parking_type:
-            query = query.where(ParkingAllocation.parking_type == parking_type)
-            count_query = count_query.where(ParkingAllocation.parking_type == parking_type)
-        
+            conditions.append(ParkingAllocation.parking_type == parking_type)
         if is_active is not None:
-            query = query.where(ParkingAllocation.is_active == is_active)
-            count_query = count_query.where(ParkingAllocation.is_active == is_active)
+            conditions.append(ParkingAllocation.is_active == is_active)
         
+        if conditions:
+            query = query.where(and_(*conditions))
+            count_query = count_query.where(and_(*conditions))
+        
+        # Get total count
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
         
+        # Get paginated results
+        query = query.order_by(ParkingAllocation.entry_time.desc())
         query = query.offset((page - 1) * page_size).limit(page_size)
-        query = query.order_by(ParkingAllocation.created_at.desc())
-        
         result = await self.db.execute(query)
-        allocations = result.scalars().all()
+        allocations = list(result.scalars().all())
         
-        return list(allocations), total
+        return allocations, total
     
     async def list_visitor_allocations(
         self,
@@ -466,7 +432,7 @@ class ParkingService:
         page: int = 1,
         page_size: int = 20
     ) -> Tuple[List[ParkingAllocation], int]:
-        """List visitor parking allocations - for Security Admin dashboard."""
+        """List visitor parking allocations."""
         return await self.list_allocations(
             parking_type=ParkingType.VISITOR,
             is_active=is_active,
@@ -474,116 +440,47 @@ class ParkingService:
             page_size=page_size
         )
     
-    async def get_parking_history(
-        self,
-        user_id: Optional[UUID] = None,
-        floor_plan_id: Optional[UUID] = None,
-        parking_type: Optional[ParkingType] = None,
-        page: int = 1,
-        page_size: int = 20
-    ) -> Tuple[List[ParkingHistory], int]:
-        """Get parking history with filtering."""
-        query = select(ParkingHistory)
-        count_query = select(func.count(ParkingHistory.id))
+    async def get_parking_stats(self) -> dict:
+        """Get parking statistics."""
+        # Total slots
+        total_result = await self.db.execute(
+            select(func.count(ParkingSlot.id)).where(ParkingSlot.is_active == True)
+        )
+        total_slots = total_result.scalar() or 0
         
-        if user_id:
-            query = query.where(ParkingHistory.user_id == user_id)
-            count_query = count_query.where(ParkingHistory.user_id == user_id)
-        
-        if floor_plan_id:
-            query = query.where(ParkingHistory.floor_plan_id == floor_plan_id)
-            count_query = count_query.where(ParkingHistory.floor_plan_id == floor_plan_id)
-        
-        if parking_type:
-            query = query.where(ParkingHistory.parking_type == parking_type)
-            count_query = count_query.where(ParkingHistory.parking_type == parking_type)
-        
-        total_result = await self.db.execute(count_query)
-        total = total_result.scalar()
-        
-        query = query.offset((page - 1) * page_size).limit(page_size)
-        query = query.order_by(ParkingHistory.entry_time.desc())
-        
-        result = await self.db.execute(query)
-        history = result.scalars().all()
-        
-        return list(history), total
-    
-    async def get_parking_stats(
-        self,
-        floor_plan_id: Optional[UUID] = None
-    ) -> dict:
-        """Get parking statistics for dashboard."""
-        # Total slots - from floor plan grids
-        floor_plans = await self.get_parking_floor_plans()
-        
-        total_slots = 0
-        occupied_slots = 0
-        visitor_count = 0
-        employee_count = 0
-        
-        for fp in floor_plans:
-            if floor_plan_id and fp.id != floor_plan_id:
-                continue
-            
-            # Count slots from grid
-            version_result = await self.db.execute(
-                select(FloorPlanVersion)
-                .where(FloorPlanVersion.floor_plan_id == fp.id)
-                .order_by(FloorPlanVersion.version.desc())
-                .limit(1)
-            )
-            version = version_result.scalar_one_or_none()
-            
-            if version:
-                for row in version.grid_data:
-                    for cell in row:
-                        if cell.get("cell_type") == CellType.PARKING_SLOT.value:
-                            total_slots += 1
-        
-        # Count occupied
-        occupied_query = select(func.count(ParkingAllocation.id)).where(
-            and_(
-                ParkingAllocation.is_active == True,
-                ParkingAllocation.exit_time.is_(None)
+        # Employee slots
+        emp_result = await self.db.execute(
+            select(func.count(ParkingSlot.id)).where(
+                and_(
+                    ParkingSlot.is_active == True,
+                    ParkingSlot.parking_type == ParkingType.EMPLOYEE
+                )
             )
         )
+        employee_slots = emp_result.scalar() or 0
         
-        if floor_plan_id:
-            occupied_query = occupied_query.where(
-                ParkingAllocation.floor_plan_id == floor_plan_id
-            )
+        # Visitor slots
+        visitor_slots = total_slots - employee_slots
         
-        result = await self.db.execute(occupied_query)
-        occupied_slots = result.scalar() or 0
-        
-        # Count by type
-        for ptype in [ParkingType.VISITOR, ParkingType.EMPLOYEE]:
-            count_query = select(func.count(ParkingAllocation.id)).where(
+        # Occupied slots
+        occupied_result = await self.db.execute(
+            select(func.count(ParkingAllocation.id)).where(
                 and_(
                     ParkingAllocation.is_active == True,
-                    ParkingAllocation.exit_time.is_(None),
-                    ParkingAllocation.parking_type == ptype
+                    ParkingAllocation.exit_time.is_(None)
                 )
             )
-            if floor_plan_id:
-                count_query = count_query.where(
-                    ParkingAllocation.floor_plan_id == floor_plan_id
-                )
-            
-            result = await self.db.execute(count_query)
-            count = result.scalar() or 0
-            
-            if ptype == ParkingType.VISITOR:
-                visitor_count = count
-            else:
-                employee_count = count
+        )
+        occupied_slots = occupied_result.scalar() or 0
+        
+        available_slots = total_slots - occupied_slots
+        occupancy_percentage = (occupied_slots / total_slots * 100) if total_slots > 0 else 0
         
         return {
             "total_slots": total_slots,
+            "employee_slots": employee_slots,
+            "visitor_slots": visitor_slots,
             "occupied_slots": occupied_slots,
-            "available_slots": total_slots - occupied_slots,
-            "visitor_count": visitor_count,
-            "employee_count": employee_count,
-            "occupancy_rate": round((occupied_slots / total_slots * 100), 2) if total_slots > 0 else 0
+            "available_slots": available_slots,
+            "occupancy_percentage": round(occupancy_percentage, 2)
         }

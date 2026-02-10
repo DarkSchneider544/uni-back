@@ -1,54 +1,67 @@
 from sqlalchemy import (
-    Column, String, Boolean, DateTime, Date, ForeignKey, Text, Index, Enum, Time, Integer
+    Column, String, Boolean, DateTime, Date, ForeignKey, Text, Index, Enum, Time, Integer, event
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
+import random
+import string
 
 from .base import Base, TimestampMixin
 from .enums import BookingStatus, DeskStatus
 
 
+def generate_desk_code() -> str:
+    """Generate a unique desk code. Format: DSK-XXXX"""
+    digits = ''.join(random.choices(string.digits, k=4))
+    return f"DSK-{digits}"
+
+
+def generate_room_code() -> str:
+    """Generate a unique conference room code. Format: CNF-XXXX"""
+    digits = ''.join(random.choices(string.digits, k=4))
+    return f"CNF-{digits}"
+
+
 class Desk(Base, TimestampMixin):
     """
-    Desk definition from floor plan.
-    Managed by DESK admin.
+    Desk definition - managed by DESK_CONFERENCE Manager.
+    Codes are auto-generated. Simplified without location fields.
     """
     __tablename__ = "desks"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
-    # Reference to floor plan
-    floor_plan_id = Column(UUID(as_uuid=True), ForeignKey("floor_plans.id"), nullable=False)
-    
-    # Desk identification
-    desk_code = Column(String(20), unique=True, nullable=False, index=True)  # e.g., D-A01, D-B02
+    # Desk identification - auto-generated
+    desk_code = Column(String(20), unique=True, nullable=False, index=True)
     desk_label = Column(String(50), nullable=False)
-    
-    # Grid position
-    cell_row = Column(Integer, nullable=False)
-    cell_column = Column(Integer, nullable=False)
     
     # Desk properties
     status = Column(Enum(DeskStatus), default=DeskStatus.AVAILABLE)
     has_monitor = Column(Boolean, default=True)
     has_docking_station = Column(Boolean, default=False)
     
-    # Location info
-    zone = Column(String(50), nullable=True)  # e.g., "Zone A", "Window Side"
-    
     is_active = Column(Boolean, default=True)
     notes = Column(Text, nullable=True)
     
+    # Created by - using user_code
+    created_by_code = Column(String(10), ForeignKey("users.user_code"), nullable=False)
+    
     # Relationships
-    floor_plan = relationship("FloorPlan")
     bookings = relationship("DeskBooking", back_populates="desk")
+    created_by = relationship("User", foreign_keys=[created_by_code], primaryjoin="Desk.created_by_code == User.user_code")
     
     __table_args__ = (
-        Index("ix_desks_floor", "floor_plan_id"),
         Index("ix_desks_status", "status"),
-        Index("ix_desks_zone", "zone"),
     )
+
+
+# Auto-generate desk_code before insert
+@event.listens_for(Desk, 'before_insert')
+def generate_desk_code_before_insert(mapper, connection, target):
+    """Auto-generate a unique desk code before inserting."""
+    if not target.desk_code:
+        target.desk_code = generate_desk_code()
 
 
 class DeskBooking(Base, TimestampMixin):
@@ -96,46 +109,45 @@ class DeskBooking(Base, TimestampMixin):
 
 class ConferenceRoom(Base, TimestampMixin):
     """
-    Conference room definition from floor plan.
-    Managed by DESK admin.
+    Conference room definition - managed by DESK_CONFERENCE Manager.
+    Codes are auto-generated. Simplified with only essential fields.
     """
     __tablename__ = "conference_rooms"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
-    # Reference to floor plan
-    floor_plan_id = Column(UUID(as_uuid=True), ForeignKey("floor_plans.id"), nullable=False)
-    
-    # Room identification
+    # Room identification - auto-generated
     room_code = Column(String(20), unique=True, nullable=False, index=True)
-    room_name = Column(String(100), nullable=False)
+    room_label = Column(String(100), nullable=False)
     
-    # Grid position (start position, rooms span multiple cells)
-    cell_row = Column(Integer, nullable=False)
-    cell_column = Column(Integer, nullable=False)
-    cell_span_rows = Column(Integer, default=1)
-    cell_span_cols = Column(Integer, default=1)
-    
-    # Room properties
+    # Room properties - only essential ones
     capacity = Column(Integer, nullable=False)
     has_projector = Column(Boolean, default=False)
     has_whiteboard = Column(Boolean, default=True)
-    has_video_conference = Column(Boolean, default=False)
-    has_phone = Column(Boolean, default=False)
+    has_video_conferencing = Column(Boolean, default=False)
     
     status = Column(Enum(DeskStatus), default=DeskStatus.AVAILABLE)
     is_active = Column(Boolean, default=True)
     notes = Column(Text, nullable=True)
-    image_url = Column(String(500), nullable=True)
+    
+    # Created by - using user_code
+    created_by_code = Column(String(10), ForeignKey("users.user_code"), nullable=False)
     
     # Relationships
-    floor_plan = relationship("FloorPlan")
     bookings = relationship("ConferenceRoomBooking", back_populates="room")
+    created_by = relationship("User", foreign_keys=[created_by_code], primaryjoin="ConferenceRoom.created_by_code == User.user_code")
     
     __table_args__ = (
-        Index("ix_conference_rooms_floor", "floor_plan_id"),
         Index("ix_conference_rooms_capacity", "capacity"),
     )
+
+
+# Auto-generate room_code before insert
+@event.listens_for(ConferenceRoom, 'before_insert')
+def generate_room_code_before_insert(mapper, connection, target):
+    """Auto-generate a unique conference room code before inserting."""
+    if not target.room_code:
+        target.room_code = generate_room_code()
 
 
 class ConferenceRoomBooking(Base, TimestampMixin):

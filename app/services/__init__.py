@@ -1,6 +1,5 @@
 from .auth_service import AuthService
 from .user_service import UserService
-from .floor_plan_service import FloorPlanService
 from .parking_service import ParkingService
 from .desk_service import DeskService
 from .cafeteria_service import CafeteriaService
@@ -14,7 +13,7 @@ from .embedding_service import EmbeddingService
 from .search_service import SearchService
 
 __all__ = [
-    "AuthService", "UserService", "FloorPlanService",
+    "AuthService", "UserService",
     "ParkingService", "DeskService", "CafeteriaService", "FoodService",
     "AttendanceService", "LeaveService", "ITAssetService", "ITRequestService",
     "ProjectService", "EmbeddingService", "SearchService"

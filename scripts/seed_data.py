@@ -1,5 +1,7 @@
 """
 Seed data script for initial setup.
+Creates managers with ManagerType, employees, desks, parking slots, cafeteria tables, and IT assets.
+
 Run with: python -m scripts.seed_data
 """
 import asyncio
@@ -13,18 +15,28 @@ from sqlalchemy import select
 from app.core.database import AsyncSessionLocal
 from app.core.security import get_password_hash
 from app.models.user import User
-from app.models.floor_plan import FloorPlan, FloorPlanVersion
+from app.models.desk import Desk, ConferenceRoom
+from app.models.parking import ParkingSlot
+from app.models.cafeteria import CafeteriaTable
 from app.models.food import FoodItem
 from app.models.it_asset import ITAsset
 from app.models.enums import (
-    UserRole, AdminType, FloorPlanType, CellType, AssetType, AssetStatus
+    UserRole, ManagerType, AssetType, AssetStatus,
+    DeskStatus, ParkingSlotStatus, VehicleType, ParkingType
 )
 from decimal import Decimal
-import uuid
+import random
 
 
 async def seed_users(db: AsyncSession):
-    """Seed initial users with auto-generated 4-digit user codes."""
+    """
+    Seed initial users:
+    - 1 Super Admin
+    - 1 Admin
+    - 5 Managers (one for each ManagerType)
+    - 2 Team Leads
+    - 5 Employees
+    """
     users = [
         # Super Admin
         {
@@ -34,95 +46,146 @@ async def seed_users(db: AsyncSession):
             "first_name": "Super",
             "last_name": "Admin",
             "role": UserRole.SUPER_ADMIN,
-            "admin_type": None,
+            "manager_type": None,
             "department": "Administration"
         },
-        # IT Admin
+        # Admin
         {
             "user_code": "2001",
-            "email": "it.admin@company.com",
+            "email": "admin@company.com",
             "password": "Admin@123",
-            "first_name": "IT",
+            "first_name": "System",
             "last_name": "Admin",
             "role": UserRole.ADMIN,
-            "admin_type": AdminType.IT,
-            "department": "IT"
+            "manager_type": None,
+            "department": "Administration"
         },
-        # Security Admin
-        {
-            "user_code": "2002",
-            "email": "security.admin@company.com",
-            "password": "Admin@123",
-            "first_name": "Security",
-            "last_name": "Admin",
-            "role": UserRole.ADMIN,
-            "admin_type": AdminType.SECURITY,
-            "department": "Security"
-        },
-        # Cafeteria Admin
-        {
-            "user_code": "2003",
-            "email": "cafeteria.admin@company.com",
-            "password": "Admin@123",
-            "first_name": "Cafeteria",
-            "last_name": "Admin",
-            "role": UserRole.ADMIN,
-            "admin_type": AdminType.CAFETERIA,
-            "department": "Food Services"
-        },
-        # Desk Admin
-        {
-            "user_code": "2004",
-            "email": "desk.admin@company.com",
-            "password": "Admin@123",
-            "first_name": "Desk",
-            "last_name": "Admin",
-            "role": UserRole.ADMIN,
-            "admin_type": AdminType.DESK,
-            "department": "Facilities"
-        },
-        # Manager
+        # Parking Manager
         {
             "user_code": "3001",
-            "email": "manager@company.com",
+            "email": "parking.manager@company.com",
             "password": "Manager@123",
-            "first_name": "John",
-            "last_name": "Manager",
+            "first_name": "Rajesh",
+            "last_name": "Kumar",
             "role": UserRole.MANAGER,
-            "admin_type": None,
-            "department": "Engineering"
+            "manager_type": ManagerType.PARKING,
+            "department": "Facilities"
         },
-        # Team Lead
+        # Attendance Manager
         {
             "user_code": "3002",
-            "email": "teamlead@company.com",
-            "password": "TeamLead@123",
-            "first_name": "Jane",
-            "last_name": "TeamLead",
-            "role": UserRole.TEAM_LEAD,
-            "admin_type": None,
-            "department": "Engineering"
+            "email": "attendance.manager@company.com",
+            "password": "Manager@123",
+            "first_name": "Priya",
+            "last_name": "Sharma",
+            "role": UserRole.MANAGER,
+            "manager_type": ManagerType.ATTENDANCE,
+            "department": "HR"
         },
-        # Employees
+        # Desk & Conference Manager
+        {
+            "user_code": "3003",
+            "email": "desk.manager@company.com",
+            "password": "Manager@123",
+            "first_name": "Amit",
+            "last_name": "Patel",
+            "role": UserRole.MANAGER,
+            "manager_type": ManagerType.DESK_CONFERENCE,
+            "department": "Facilities"
+        },
+        # Cafeteria Manager
+        {
+            "user_code": "3004",
+            "email": "cafeteria.manager@company.com",
+            "password": "Manager@123",
+            "first_name": "Sunita",
+            "last_name": "Gupta",
+            "role": UserRole.MANAGER,
+            "manager_type": ManagerType.CAFETERIA,
+            "department": "Food Services"
+        },
+        # IT Support Manager
+        {
+            "user_code": "3005",
+            "email": "it.manager@company.com",
+            "password": "Manager@123",
+            "first_name": "Vikram",
+            "last_name": "Singh",
+            "role": UserRole.MANAGER,
+            "manager_type": ManagerType.IT_SUPPORT,
+            "department": "IT"
+        },
+        # Team Leads
         {
             "user_code": "4001",
-            "email": "employee1@company.com",
-            "password": "Employee@123",
-            "first_name": "Alice",
-            "last_name": "Employee",
-            "role": UserRole.EMPLOYEE,
-            "admin_type": None,
-            "department": "Engineering"
+            "email": "dev.teamlead@company.com",
+            "password": "TeamLead@123",
+            "first_name": "Ravi",
+            "last_name": "Verma",
+            "role": UserRole.TEAM_LEAD,
+            "manager_type": None,
+            "department": "Development"
         },
         {
             "user_code": "4002",
+            "email": "sales.teamlead@company.com",
+            "password": "TeamLead@123",
+            "first_name": "Anita",
+            "last_name": "Desai",
+            "role": UserRole.TEAM_LEAD,
+            "manager_type": None,
+            "department": "Sales"
+        },
+        # Employees
+        {
+            "user_code": "5001",
+            "email": "employee1@company.com",
+            "password": "Employee@123",
+            "first_name": "Alice",
+            "last_name": "Johnson",
+            "role": UserRole.EMPLOYEE,
+            "manager_type": None,
+            "department": "Development"
+        },
+        {
+            "user_code": "5002",
             "email": "employee2@company.com",
             "password": "Employee@123",
             "first_name": "Bob",
-            "last_name": "Employee",
+            "last_name": "Smith",
             "role": UserRole.EMPLOYEE,
-            "admin_type": None,
-            "department": "Engineering"
+            "manager_type": None,
+            "department": "Development"
+        },
+        {
+            "user_code": "5003",
+            "email": "employee3@company.com",
+            "password": "Employee@123",
+            "first_name": "Charlie",
+            "last_name": "Brown",
+            "role": UserRole.EMPLOYEE,
+            "manager_type": None,
+            "department": "Sales"
+        },
+        {
+            "user_code": "5004",
+            "email": "employee4@company.com",
+            "password": "Employee@123",
+            "first_name": "Diana",
+            "last_name": "Williams",
+            "role": UserRole.EMPLOYEE,
+            "manager_type": None,
+            "department": "HR"
+        },
+        {
+            "user_code": "5005",
+            "email": "employee5@company.com",
+            "password": "Employee@123",
+            "first_name": "Ethan",
+            "last_name": "Davis",
+            "role": UserRole.EMPLOYEE,
+            "manager_type": None,
+            "department": "IT"
         },
     ]
     
@@ -146,163 +209,220 @@ async def seed_users(db: AsyncSession):
             first_name=user_data["first_name"],
             last_name=user_data["last_name"],
             role=user_data["role"],
-            admin_type=user_data.get("admin_type"),
+            manager_type=user_data.get("manager_type"),
             department=user_data.get("department"),
             is_active=True
         )
         db.add(user)
         created_users.append(user)
-        print(f"  Created user: {user_data['email']} (Code: {user_data['user_code']})")
+        print(f"  Created user: {user_data['email']} (Code: {user_data['user_code']}, Role: {user_data['role'].value})")
     
     await db.commit()
     return created_users
 
 
-async def seed_floor_plans(db: AsyncSession, users: list):
-    """Seed initial floor plans for each type."""
-    # Find the admin users
-    desk_admin = next((u for u in users if u.admin_type == AdminType.DESK), users[0])
-    cafeteria_admin = next((u for u in users if u.admin_type == AdminType.CAFETERIA), users[0])
-    security_admin = next((u for u in users if u.admin_type == AdminType.SECURITY), users[0])
+async def seed_desks(db: AsyncSession, users: list):
+    """
+    Seed sample desks (10 desks with auto-generated DSK-XXXX codes).
+    """
+    # Find desk manager
+    desk_manager = next((u for u in users if u.manager_type == ManagerType.DESK_CONFERENCE), users[0])
     
-    floor_plans_data = [
-        {
-            "name": "Main Office - Desk Area",
-            "plan_type": FloorPlanType.DESK_AREA,
-            "rows": 10,
-            "columns": 15,
-            "description": "Main office desk layout",
-            "created_by": desk_admin,
-            "cell_types": [CellType.DESK, CellType.PATH, CellType.WALL]
-        },
-        {
-            "name": "Cafeteria - Main Floor",
-            "plan_type": FloorPlanType.CAFETERIA,
-            "rows": 8,
-            "columns": 12,
-            "description": "Main cafeteria table layout",
-            "created_by": cafeteria_admin,
-            "cell_types": [CellType.CAFETERIA_TABLE, CellType.PATH]
-        },
-        {
-            "name": "Parking Basement Level 1",
-            "plan_type": FloorPlanType.PARKING,
-            "rows": 10,
-            "columns": 20,
-            "description": "Basement parking slots",
-            "created_by": security_admin,
-            "cell_types": [CellType.PARKING_SLOT, CellType.PATH]
-        },
+    # Check existing count
+    result = await db.execute(select(Desk))
+    existing_desks = result.scalars().all()
+    if len(existing_desks) >= 10:
+        print(f"  Desks already seeded ({len(existing_desks)} desks)")
+        return
+    
+    desk_labels = [
+        "Window Desk A1", "Window Desk A2", "Window Desk A3",
+        "Corner Desk B1", "Corner Desk B2",
+        "Open Area C1", "Open Area C2", "Open Area C3",
+        "Quiet Zone D1", "Quiet Zone D2"
     ]
     
-    created_plans = []
-    for fp_data in floor_plans_data:
-        # Check if floor plan exists
-        result = await db.execute(
-            select(FloorPlan).where(FloorPlan.name == fp_data["name"])
+    for i, label in enumerate(desk_labels):
+        desk_code = f"DSK-{random.randint(1000, 9999)}"
+        
+        desk = Desk(
+            desk_code=desk_code,
+            desk_label=label,
+            status=DeskStatus.AVAILABLE,
+            has_monitor=random.choice([True, False]),
+            has_keyboard=True,
+            has_mouse=True,
+            has_headset=random.choice([True, False]),
+            notes=f"Desk {i+1} of 10 - auto-seeded",
+            is_active=True,
+            created_by_id=desk_manager.id
         )
-        existing = result.scalar_one_or_none()
-        
-        if existing:
-            print(f"  Floor plan already exists: {fp_data['name']}")
-            created_plans.append(existing)
-            continue
-        
-        floor_plan = FloorPlan(
-            name=fp_data["name"],
-            plan_type=fp_data["plan_type"],
-            rows=fp_data["rows"],
-            columns=fp_data["columns"],
-            description=fp_data["description"],
-            created_by_id=fp_data["created_by"].id,
-            is_active=True
-        )
-        db.add(floor_plan)
-        await db.flush()
-        
-        # Create initial grid
-        grid = create_sample_grid(
-            fp_data["rows"], 
-            fp_data["columns"], 
-            fp_data["cell_types"],
-            fp_data["plan_type"]
-        )
-        
-        version = FloorPlanVersion(
-            floor_plan_id=floor_plan.id,
-            version=1,
-            grid_data=grid,
-            created_by_id=fp_data["created_by"].id
-        )
-        db.add(version)
-        
-        created_plans.append(floor_plan)
-        print(f"  Created floor plan: {fp_data['name']}")
+        db.add(desk)
+        print(f"  Created desk: {desk_code} - {label}")
     
     await db.commit()
-    return created_plans
 
 
-def create_sample_grid(rows: int, columns: int, cell_types: list, plan_type: FloorPlanType) -> list:
-    """Create a sample grid with the given cell types."""
-    grid = []
+async def seed_conference_rooms(db: AsyncSession, users: list):
+    """
+    Seed sample conference rooms (5 rooms with auto-generated CNF-XXXX codes).
+    """
+    # Find desk manager
+    desk_manager = next((u for u in users if u.manager_type == ManagerType.DESK_CONFERENCE), users[0])
     
-    for row in range(rows):
-        row_data = []
-        for col in range(columns):
-            # Default to path
-            cell = {"cell_type": CellType.PATH.value, "label": None}
-            
-            # Outer edges are paths
-            if row == 0 or row == rows - 1 or col == 0 or col == columns - 1:
-                cell = {"cell_type": CellType.PATH.value, "label": None}
-            else:
-                # Inner cells based on plan type
-                if plan_type == FloorPlanType.DESK_AREA:
-                    # Create desk clusters
-                    if row % 3 != 0 and col % 3 != 0:
-                        cell = {
-                            "cell_type": CellType.DESK.value,
-                            "label": f"D-{row}-{col}",
-                            "capacity": 1
-                        }
-                elif plan_type == FloorPlanType.CAFETERIA:
-                    # Create table layout
-                    if row % 2 != 0 and col % 3 != 0:
-                        cell = {
-                            "cell_type": CellType.CAFETERIA_TABLE.value,
-                            "label": f"T-{row}-{col}",
-                            "seats": 4
-                        }
-                elif plan_type == FloorPlanType.PARKING:
-                    # Create parking slots
-                    if col % 2 != 0 and row % 2 != 0:
-                        cell = {
-                            "cell_type": CellType.PARKING_SLOT.value,
-                            "label": f"P-{row}-{col}",
-                            "direction": "up"
-                        }
-            
-            row_data.append(cell)
-        grid.append(row_data)
+    # Check existing count
+    result = await db.execute(select(ConferenceRoom))
+    existing_rooms = result.scalars().all()
+    if len(existing_rooms) >= 5:
+        print(f"  Conference rooms already seeded ({len(existing_rooms)} rooms)")
+        return
     
-    return grid
+    rooms = [
+        {"label": "Board Room", "capacity": 20, "has_projector": True, "has_tv": True, "has_whiteboard": True, "has_video_conferencing": True},
+        {"label": "Meeting Room Alpha", "capacity": 8, "has_projector": True, "has_tv": False, "has_whiteboard": True, "has_video_conferencing": True},
+        {"label": "Meeting Room Beta", "capacity": 6, "has_projector": False, "has_tv": True, "has_whiteboard": True, "has_video_conferencing": False},
+        {"label": "Huddle Space 1", "capacity": 4, "has_projector": False, "has_tv": True, "has_whiteboard": False, "has_video_conferencing": False},
+        {"label": "Interview Room", "capacity": 3, "has_projector": False, "has_tv": False, "has_whiteboard": True, "has_video_conferencing": True},
+    ]
+    
+    for room_data in rooms:
+        room_code = f"CNF-{random.randint(1000, 9999)}"
+        
+        room = ConferenceRoom(
+            room_code=room_code,
+            room_label=room_data["label"],
+            capacity=room_data["capacity"],
+            has_projector=room_data["has_projector"],
+            has_tv=room_data["has_tv"],
+            has_whiteboard=room_data["has_whiteboard"],
+            has_video_conferencing=room_data["has_video_conferencing"],
+            notes=f"Conference room - auto-seeded",
+            is_active=True,
+            created_by_id=desk_manager.id
+        )
+        db.add(room)
+        print(f"  Created conference room: {room_code} - {room_data['label']} (capacity: {room_data['capacity']})")
+    
+    await db.commit()
+
+
+async def seed_parking_slots(db: AsyncSession, users: list):
+    """
+    Seed sample parking slots (15 slots with auto-generated PKG-XXXX codes).
+    """
+    # Find parking manager
+    parking_manager = next((u for u in users if u.manager_type == ManagerType.PARKING), users[0])
+    
+    # Check existing count
+    result = await db.execute(select(ParkingSlot))
+    existing_slots = result.scalars().all()
+    if len(existing_slots) >= 15:
+        print(f"  Parking slots already seeded ({len(existing_slots)} slots)")
+        return
+    
+    # Employee slots (10)
+    employee_slots = [
+        {"label": "Employee A1", "vehicle_type": VehicleType.CAR, "parking_type": ParkingType.EMPLOYEE},
+        {"label": "Employee A2", "vehicle_type": VehicleType.CAR, "parking_type": ParkingType.EMPLOYEE},
+        {"label": "Employee A3", "vehicle_type": VehicleType.CAR, "parking_type": ParkingType.EMPLOYEE},
+        {"label": "Employee B1", "vehicle_type": VehicleType.CAR, "parking_type": ParkingType.EMPLOYEE},
+        {"label": "Employee B2", "vehicle_type": VehicleType.CAR, "parking_type": ParkingType.EMPLOYEE},
+        {"label": "Bike Bay 1", "vehicle_type": VehicleType.BIKE, "parking_type": ParkingType.EMPLOYEE},
+        {"label": "Bike Bay 2", "vehicle_type": VehicleType.BIKE, "parking_type": ParkingType.EMPLOYEE},
+        {"label": "Bike Bay 3", "vehicle_type": VehicleType.TWO_WHEELER, "parking_type": ParkingType.EMPLOYEE},
+        {"label": "Bike Bay 4", "vehicle_type": VehicleType.TWO_WHEELER, "parking_type": ParkingType.EMPLOYEE},
+        {"label": "Bike Bay 5", "vehicle_type": VehicleType.TWO_WHEELER, "parking_type": ParkingType.EMPLOYEE},
+    ]
+    
+    # Visitor slots (5)
+    visitor_slots = [
+        {"label": "Visitor V1", "vehicle_type": VehicleType.CAR, "parking_type": ParkingType.VISITOR},
+        {"label": "Visitor V2", "vehicle_type": VehicleType.CAR, "parking_type": ParkingType.VISITOR},
+        {"label": "Visitor V3", "vehicle_type": VehicleType.CAR, "parking_type": ParkingType.VISITOR},
+        {"label": "Visitor Bike 1", "vehicle_type": VehicleType.BIKE, "parking_type": ParkingType.VISITOR},
+        {"label": "Visitor Bike 2", "vehicle_type": VehicleType.BIKE, "parking_type": ParkingType.VISITOR},
+    ]
+    
+    all_slots = employee_slots + visitor_slots
+    
+    for slot_data in all_slots:
+        slot_code = f"PKG-{random.randint(1000, 9999)}"
+        
+        slot = ParkingSlot(
+            slot_code=slot_code,
+            slot_label=slot_data["label"],
+            parking_type=slot_data["parking_type"],
+            vehicle_type=slot_data["vehicle_type"],
+            status=ParkingSlotStatus.AVAILABLE,
+            notes=f"Parking slot - auto-seeded",
+            is_active=True,
+            created_by_id=parking_manager.id
+        )
+        db.add(slot)
+        print(f"  Created parking slot: {slot_code} - {slot_data['label']} ({slot_data['parking_type'].value})")
+    
+    await db.commit()
+
+
+async def seed_cafeteria_tables(db: AsyncSession, users: list):
+    """
+    Seed sample cafeteria tables (8 tables with auto-generated TBL-XXXX codes).
+    """
+    # Find cafeteria manager
+    cafeteria_manager = next((u for u in users if u.manager_type == ManagerType.CAFETERIA), users[0])
+    
+    # Check existing count
+    result = await db.execute(select(CafeteriaTable))
+    existing_tables = result.scalars().all()
+    if len(existing_tables) >= 8:
+        print(f"  Cafeteria tables already seeded ({len(existing_tables)} tables)")
+        return
+    
+    tables = [
+        {"label": "Window Table 1", "capacity": 4, "table_type": "regular"},
+        {"label": "Window Table 2", "capacity": 4, "table_type": "regular"},
+        {"label": "Center Table 1", "capacity": 6, "table_type": "large"},
+        {"label": "Center Table 2", "capacity": 6, "table_type": "large"},
+        {"label": "Round Table 1", "capacity": 8, "table_type": "round"},
+        {"label": "Round Table 2", "capacity": 8, "table_type": "round"},
+        {"label": "High Top 1", "capacity": 2, "table_type": "high"},
+        {"label": "High Top 2", "capacity": 2, "table_type": "high"},
+    ]
+    
+    for table_data in tables:
+        table_code = f"TBL-{random.randint(1000, 9999)}"
+        
+        table = CafeteriaTable(
+            table_code=table_code,
+            table_label=table_data["label"],
+            capacity=table_data["capacity"],
+            table_type=table_data["table_type"],
+            notes=f"Cafeteria table - auto-seeded",
+            is_active=True,
+            created_by_id=cafeteria_manager.id
+        )
+        db.add(table)
+        print(f"  Created cafeteria table: {table_code} - {table_data['label']} (capacity: {table_data['capacity']})")
+    
+    await db.commit()
 
 
 async def seed_food_items(db: AsyncSession, users: list):
     """Seed sample food items."""
-    # Find cafeteria admin to be the creator
-    cafeteria_admin = next((u for u in users if u.admin_type == AdminType.CAFETERIA), users[0])
+    # Find cafeteria manager
+    cafeteria_manager = next((u for u in users if u.manager_type == ManagerType.CAFETERIA), users[0])
     
     food_items = [
-        {"name": "Butter Chicken", "description": "Creamy tomato-based curry", "price": Decimal("12.99"), "category": "Main Course", "tags": ["non-veg", "spicy"], "calories": 450},
-        {"name": "Paneer Tikka", "description": "Grilled cottage cheese", "price": Decimal("9.99"), "category": "Starters", "tags": ["vegetarian", "high-protein"], "calories": 280},
+        {"name": "Butter Chicken", "description": "Creamy tomato-based curry with tender chicken", "price": Decimal("12.99"), "category": "Main Course", "tags": ["non-veg", "spicy"], "calories": 450},
+        {"name": "Paneer Tikka", "description": "Grilled cottage cheese with spices", "price": Decimal("9.99"), "category": "Starters", "tags": ["vegetarian", "high-protein"], "calories": 280},
         {"name": "Masala Dosa", "description": "Crispy rice crepe with potato filling", "price": Decimal("7.99"), "category": "South Indian", "tags": ["vegetarian", "vegan"], "calories": 320},
-        {"name": "Chicken Biryani", "description": "Aromatic rice with chicken", "price": Decimal("14.99"), "category": "Main Course", "tags": ["non-veg", "spicy"], "calories": 520},
+        {"name": "Chicken Biryani", "description": "Aromatic basmati rice with spiced chicken", "price": Decimal("14.99"), "category": "Main Course", "tags": ["non-veg", "spicy"], "calories": 520},
+        {"name": "Dal Makhani", "description": "Creamy black lentils slow-cooked", "price": Decimal("8.99"), "category": "Main Course", "tags": ["vegetarian"], "calories": 350},
         {"name": "Mango Lassi", "description": "Sweet mango yogurt drink", "price": Decimal("3.99"), "category": "Beverages", "tags": ["vegetarian", "sweet"], "calories": 180},
-        {"name": "Coffee", "description": "Hot brewed coffee", "price": Decimal("2.49"), "category": "Beverages", "tags": ["vegetarian", "vegan"], "calories": 5},
-        {"name": "Tea", "description": "Hot brewed tea", "price": Decimal("1.99"), "category": "Beverages", "tags": ["vegetarian", "vegan"], "calories": 2},
-        {"name": "Veg Sandwich", "description": "Fresh vegetable sandwich", "price": Decimal("4.99"), "category": "Snacks", "tags": ["vegetarian", "healthy"], "calories": 250},
+        {"name": "Coffee", "description": "Fresh brewed hot coffee", "price": Decimal("2.49"), "category": "Beverages", "tags": ["vegetarian", "vegan"], "calories": 5},
+        {"name": "Tea", "description": "Hot brewed masala chai", "price": Decimal("1.99"), "category": "Beverages", "tags": ["vegetarian", "vegan"], "calories": 25},
+        {"name": "Veg Sandwich", "description": "Fresh vegetable grilled sandwich", "price": Decimal("4.99"), "category": "Snacks", "tags": ["vegetarian", "healthy"], "calories": 250},
+        {"name": "Samosa", "description": "Crispy fried pastry with potato filling", "price": Decimal("2.99"), "category": "Snacks", "tags": ["vegetarian", "spicy"], "calories": 150},
     ]
     
     for item_data in food_items:
@@ -324,23 +444,30 @@ async def seed_food_items(db: AsyncSession, users: list):
             calories=item_data["calories"],
             is_available=True,
             is_active=True,
-            created_by_id=cafeteria_admin.id
+            created_by_id=cafeteria_manager.id
         )
         db.add(item)
-        print(f"  Created food item: {item_data['name']}")
+        print(f"  Created food item: {item_data['name']} (₹{item_data['price']})")
     
     await db.commit()
 
 
-async def seed_it_assets(db: AsyncSession):
+async def seed_it_assets(db: AsyncSession, users: list):
     """Seed sample IT assets."""
+    # Find IT manager
+    it_manager = next((u for u in users if u.manager_type == ManagerType.IT_SUPPORT), users[0])
+    
     assets = [
-        {"asset_id": "IT-LAP-001", "name": "Dell Laptop 15", "asset_type": AssetType.LAPTOP, "serial_number": "DELL-001", "model": "Latitude 5520", "vendor": "Dell"},
-        {"asset_id": "IT-LAP-002", "name": "Dell Laptop 15", "asset_type": AssetType.LAPTOP, "serial_number": "DELL-002", "model": "Latitude 5520", "vendor": "Dell"},
+        {"asset_id": "IT-LAP-001", "name": "Dell Latitude 5520", "asset_type": AssetType.LAPTOP, "serial_number": "DELL-LAP-001", "model": "Latitude 5520", "vendor": "Dell"},
+        {"asset_id": "IT-LAP-002", "name": "Dell Latitude 5520", "asset_type": AssetType.LAPTOP, "serial_number": "DELL-LAP-002", "model": "Latitude 5520", "vendor": "Dell"},
+        {"asset_id": "IT-LAP-003", "name": "MacBook Pro 14", "asset_type": AssetType.LAPTOP, "serial_number": "APPLE-MAC-001", "model": "MacBook Pro 14", "vendor": "Apple"},
         {"asset_id": "IT-MON-001", "name": "HP Monitor 24", "asset_type": AssetType.MONITOR, "serial_number": "HP-MON-001", "model": "HP E24", "vendor": "HP"},
         {"asset_id": "IT-MON-002", "name": "HP Monitor 24", "asset_type": AssetType.MONITOR, "serial_number": "HP-MON-002", "model": "HP E24", "vendor": "HP"},
+        {"asset_id": "IT-MON-003", "name": "Dell Monitor 27", "asset_type": AssetType.MONITOR, "serial_number": "DELL-MON-001", "model": "Dell U2722D", "vendor": "Dell"},
         {"asset_id": "IT-KB-001", "name": "Logitech Keyboard", "asset_type": AssetType.KEYBOARD, "serial_number": "LOG-KB-001", "model": "K120", "vendor": "Logitech"},
+        {"asset_id": "IT-KB-002", "name": "Logitech Keyboard", "asset_type": AssetType.KEYBOARD, "serial_number": "LOG-KB-002", "model": "K120", "vendor": "Logitech"},
         {"asset_id": "IT-MS-001", "name": "Logitech Mouse", "asset_type": AssetType.MOUSE, "serial_number": "LOG-MS-001", "model": "M100", "vendor": "Logitech"},
+        {"asset_id": "IT-MS-002", "name": "Logitech Mouse", "asset_type": AssetType.MOUSE, "serial_number": "LOG-MS-002", "model": "M100", "vendor": "Logitech"},
     ]
     
     for asset_data in assets:
@@ -364,46 +491,70 @@ async def seed_it_assets(db: AsyncSession):
             is_active=True
         )
         db.add(asset)
-        print(f"  Created IT asset: {asset_data['serial_number']}")
+        print(f"  Created IT asset: {asset_data['asset_id']} - {asset_data['name']}")
     
     await db.commit()
 
 
 async def main():
     """Main seed function."""
-    print("\n========================================")
+    print("\n" + "=" * 60)
     print("  UNIFIED OFFICE MANAGEMENT - SEED DATA")
-    print("========================================\n")
+    print("  New ManagerType-Based System")
+    print("=" * 60 + "\n")
     
     async with AsyncSessionLocal() as db:
         try:
-            print("Creating users...")
+            print("1. Creating users...")
             users = await seed_users(db)
             
-            print("\nCreating floor plans...")
-            await seed_floor_plans(db, users)
+            print("\n2. Creating desks...")
+            await seed_desks(db, users)
             
-            print("\nCreating food items...")
+            print("\n3. Creating conference rooms...")
+            await seed_conference_rooms(db, users)
+            
+            print("\n4. Creating parking slots...")
+            await seed_parking_slots(db, users)
+            
+            print("\n5. Creating cafeteria tables...")
+            await seed_cafeteria_tables(db, users)
+            
+            print("\n6. Creating food items...")
             await seed_food_items(db, users)
             
-            print("\nCreating IT assets...")
-            await seed_it_assets(db)
+            print("\n7. Creating IT assets...")
+            await seed_it_assets(db, users)
             
-            print("\n========================================")
+            print("\n" + "=" * 60)
             print("  SEED DATA COMPLETED SUCCESSFULLY!")
-            print("========================================")
-            print("\nDefault credentials:")
-            print("  Super Admin: super.admin@company.com / Admin@123")
-            print("  IT Admin: it.admin@company.com / Admin@123")
-            print("  Security Admin: security.admin@company.com / Admin@123")
-            print("  Cafeteria Admin: cafeteria.admin@company.com / Admin@123")
-            print("  Desk Admin: desk.admin@company.com / Admin@123")
-            print("  Manager: manager@company.com / Manager@123")
-            print("  Employee: employee1@company.com / Employee@123")
-            print("")
+            print("=" * 60)
+            print("\n" + "-" * 60)
+            print("  DEFAULT CREDENTIALS")
+            print("-" * 60)
+            print("\n  SUPER ADMIN:")
+            print("    Email: super.admin@company.com")
+            print("    Password: Admin@123")
+            print("\n  ADMIN:")
+            print("    Email: admin@company.com")
+            print("    Password: Admin@123")
+            print("\n  MANAGERS (Password: Manager@123):")
+            print("    Parking:     parking.manager@company.com")
+            print("    Attendance:  attendance.manager@company.com")
+            print("    Desk:        desk.manager@company.com")
+            print("    Cafeteria:   cafeteria.manager@company.com")
+            print("    IT Support:  it.manager@company.com")
+            print("\n  TEAM LEADS (Password: TeamLead@123):")
+            print("    Development: dev.teamlead@company.com")
+            print("    Sales:       sales.teamlead@company.com")
+            print("\n  EMPLOYEES (Password: Employee@123):")
+            print("    employee1@company.com to employee5@company.com")
+            print("\n" + "-" * 60)
             
         except Exception as e:
             print(f"\nError during seeding: {e}")
+            import traceback
+            traceback.print_exc()
             raise
 
 

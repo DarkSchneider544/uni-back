@@ -1,33 +1,34 @@
 from sqlalchemy import (
-    Column, String, DateTime, Date, ForeignKey, Text, Index, Enum, Time, Integer, Boolean
+    Column, String, DateTime, Date, ForeignKey, Text, Index, Enum, Time, Integer, Boolean, event
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
+import random
+import string
 
 from .base import Base, TimestampMixin
 from .enums import BookingStatus
 
 
+def generate_table_code() -> str:
+    """Generate a unique cafeteria table code. Format: TBL-XXXX"""
+    digits = ''.join(random.choices(string.digits, k=4))
+    return f"TBL-{digits}"
+
+
 class CafeteriaTable(Base, TimestampMixin):
     """
-    Cafeteria table definition from floor plan.
-    Managed by CAFETERIA admin.
+    Cafeteria table definition - managed by CAFETERIA Manager.
+    Codes are auto-generated. Simplified without location fields.
     """
     __tablename__ = "cafeteria_tables"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
-    # Reference to floor plan
-    floor_plan_id = Column(UUID(as_uuid=True), ForeignKey("floor_plans.id"), nullable=False)
-    
-    # Table identification
-    table_code = Column(String(20), unique=True, nullable=False, index=True)  # e.g., T-01, T-02
+    # Table identification - auto-generated
+    table_code = Column(String(20), unique=True, nullable=False, index=True)
     table_label = Column(String(50), nullable=False)
-    
-    # Grid position
-    cell_row = Column(Integer, nullable=False)
-    cell_column = Column(Integer, nullable=False)
     
     # Table properties
     capacity = Column(Integer, nullable=False, default=4)
@@ -36,14 +37,24 @@ class CafeteriaTable(Base, TimestampMixin):
     is_active = Column(Boolean, default=True)
     notes = Column(Text, nullable=True)
     
+    # Created by - using user_code
+    created_by_code = Column(String(10), ForeignKey("users.user_code"), nullable=False)
+    
     # Relationships
-    floor_plan = relationship("FloorPlan")
     bookings = relationship("CafeteriaTableBooking", back_populates="table")
+    created_by = relationship("User", foreign_keys=[created_by_code], primaryjoin="CafeteriaTable.created_by_code == User.user_code")
     
     __table_args__ = (
-        Index("ix_cafeteria_tables_floor", "floor_plan_id"),
         Index("ix_cafeteria_tables_capacity", "capacity"),
     )
+
+
+# Auto-generate table_code before insert
+@event.listens_for(CafeteriaTable, 'before_insert')
+def generate_table_code_before_insert(mapper, connection, target):
+    """Auto-generate a unique cafeteria table code before inserting."""
+    if not target.table_code:
+        target.table_code = generate_table_code()
 
 
 class CafeteriaTableBooking(Base, TimestampMixin):
@@ -82,7 +93,7 @@ class CafeteriaTableBooking(Base, TimestampMixin):
     user = relationship("User", foreign_keys=[user_code], primaryjoin="CafeteriaTableBooking.user_code == User.user_code")
     
     __table_args__ = (
-        Index("ix_table_booking_date", "table_id", "booking_date"),
-        Index("ix_table_booking_user", "user_code", "booking_date"),
-        Index("ix_table_booking_status", "status"),
+        Index("ix_cafeteria_booking_date", "table_id", "booking_date"),
+        Index("ix_cafeteria_booking_user", "user_code", "booking_date"),
+        Index("ix_cafeteria_booking_status", "status"),
     )

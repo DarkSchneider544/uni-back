@@ -1,66 +1,178 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
+from sqlalchemy.orm import selectinload
 from typing import Optional, List, Tuple
 from uuid import UUID
-from datetime import date, time
+from datetime import date, time, datetime, timezone
 
-from ..models.cafeteria import CafeteriaTableBooking
-from ..models.floor_plan import FloorPlanVersion
+from ..models.cafeteria import CafeteriaTable, CafeteriaTableBooking
 from ..models.user import User
-from ..models.enums import CellType, BookingStatus
-from ..schemas.cafeteria import CafeteriaBookingCreate, CafeteriaBookingUpdate
+from ..models.enums import BookingStatus, UserRole, ManagerType
+from ..schemas.cafeteria import (
+    CafeteriaTableCreate, CafeteriaTableUpdate,
+    CafeteriaBookingCreate, CafeteriaBookingUpdate
+)
 
 
 class CafeteriaService:
-    """Cafeteria table booking service."""
+    """
+    Cafeteria table management service.
+    Managed by CAFETERIA Manager.
+    Simplified without location fields.
+    """
     
     def __init__(self, db: AsyncSession):
         self.db = db
     
-    async def get_booking_by_id(
-        self,
-        booking_id: UUID
-    ) -> Optional[CafeteriaTableBooking]:
-        """Get cafeteria booking by ID."""
+    def can_manage_cafeteria(self, user: User) -> bool:
+        """Check if user can manage cafeteria tables."""
+        if user.role == UserRole.SUPER_ADMIN:
+            return True
+        if user.role == UserRole.ADMIN:
+            return True
+        if user.role == UserRole.MANAGER and user.manager_type == ManagerType.CAFETERIA:
+            return True
+        return False
+    
+    # ==================== Cafeteria Table Management ====================
+    
+    async def get_table_by_id(self, table_id: UUID) -> Optional[CafeteriaTable]:
+        """Get cafeteria table by ID."""
         result = await self.db.execute(
-            select(CafeteriaTableBooking).where(CafeteriaTableBooking.id == booking_id)
+            select(CafeteriaTable).where(CafeteriaTable.id == table_id)
         )
         return result.scalar_one_or_none()
     
-    async def validate_table_cell(
-        self,
-        floor_plan_id: UUID,
-        cell_row: str,
-        cell_column: str
-    ) -> Tuple[bool, Optional[str]]:
-        """Validate that the cell is a valid cafeteria table."""
+    async def get_table_by_code(self, table_code: str) -> Optional[CafeteriaTable]:
+        """Get cafeteria table by code."""
         result = await self.db.execute(
-            select(FloorPlanVersion)
-            .where(FloorPlanVersion.floor_plan_id == floor_plan_id)
-            .order_by(FloorPlanVersion.version.desc())
-            .limit(1)
+            select(CafeteriaTable).where(CafeteriaTable.table_code == table_code)
         )
-        version = result.scalar_one_or_none()
+        return result.scalar_one_or_none()
+    
+    async def list_tables(
+        self,
+        min_capacity: Optional[int] = None,
+        is_active: Optional[bool] = True,
+        page: int = 1,
+        page_size: int = 20
+    ) -> Tuple[List[CafeteriaTable], int]:
+        """List cafeteria tables with filtering."""
+        query = select(CafeteriaTable)
+        count_query = select(func.count(CafeteriaTable.id))
         
-        if not version:
-            return False, "Floor plan not found"
+        conditions = []
+        if min_capacity:
+            conditions.append(CafeteriaTable.capacity >= min_capacity)
+        if is_active is not None:
+            conditions.append(CafeteriaTable.is_active == is_active)
         
-        row_idx = int(cell_row)
-        col_idx = int(cell_column)
+        if conditions:
+            query = query.where(and_(*conditions))
+            count_query = count_query.where(and_(*conditions))
         
-        if row_idx >= len(version.grid_data) or col_idx >= len(version.grid_data[0]):
-            return False, "Cell coordinates out of bounds"
+        # Get total count
+        total_result = await self.db.execute(count_query)
+        total = total_result.scalar()
         
-        cell = version.grid_data[row_idx][col_idx]
-        if cell.get("cell_type") != CellType.CAFETERIA_TABLE.value:
-            return False, "Cell is not a cafeteria table"
+        # Get paginated results
+        query = query.offset((page - 1) * page_size).limit(page_size)
+        result = await self.db.execute(query)
+        tables = list(result.scalars().all())
+        
+        return tables, total
+    
+    async def create_table(
+        self,
+        table_data: CafeteriaTableCreate,
+        created_by: User
+    ) -> Tuple[Optional[CafeteriaTable], Optional[str]]:
+        """Create a new cafeteria table - Manager only."""
+        if not self.can_manage_cafeteria(created_by):
+            return None, "Only CAFETERIA Manager can create cafeteria tables"
+        
+        table = CafeteriaTable(
+            table_label=table_data.table_label,
+            capacity=table_data.capacity,
+            table_type=table_data.table_type,
+            notes=table_data.notes,
+            created_by_code=created_by.user_code
+        )
+        
+        self.db.add(table)
+        await self.db.commit()
+        await self.db.refresh(table)
+        
+        return table, None
+    
+    async def update_table(
+        self,
+        table_id: UUID,
+        table_data: CafeteriaTableUpdate,
+        user: User
+    ) -> Tuple[Optional[CafeteriaTable], Optional[str]]:
+        """Update a cafeteria table - Manager only."""
+        if not self.can_manage_cafeteria(user):
+            return None, "Only CAFETERIA Manager can update cafeteria tables"
+        
+        table = await self.get_table_by_id(table_id)
+        if not table:
+            return None, "Cafeteria table not found"
+        
+        update_data = table_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(table, field, value)
+        
+        await self.db.commit()
+        await self.db.refresh(table)
+        
+        return table, None
+    
+    async def delete_table(
+        self,
+        table_id: UUID,
+        user: User
+    ) -> Tuple[bool, Optional[str]]:
+        """Soft delete a cafeteria table - Manager only."""
+        if not self.can_manage_cafeteria(user):
+            return False, "Only CAFETERIA Manager can delete cafeteria tables"
+        
+        table = await self.get_table_by_id(table_id)
+        if not table:
+            return False, "Cafeteria table not found"
+        
+        # Check for active bookings
+        active_bookings = await self.db.execute(
+            select(CafeteriaTableBooking).where(
+                and_(
+                    CafeteriaTableBooking.table_id == table_id,
+                    CafeteriaTableBooking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
+                    CafeteriaTableBooking.booking_date >= date.today()
+                )
+            )
+        )
+        if active_bookings.scalar_one_or_none():
+            return False, "Cannot delete table with active bookings"
+        
+        table.is_active = False
+        await self.db.commit()
         
         return True, None
     
+    # ==================== Cafeteria Booking ====================
+    
+    async def get_booking_by_id(self, booking_id: UUID) -> Optional[CafeteriaTableBooking]:
+        """Get cafeteria booking by ID."""
+        result = await self.db.execute(
+            select(CafeteriaTableBooking)
+            .options(selectinload(CafeteriaTableBooking.table))
+            .where(CafeteriaTableBooking.id == booking_id)
+        )
+        return result.scalar_one_or_none()
+    
     async def check_booking_overlap(
         self,
-        floor_plan_id: UUID,
-        table_label: str,
+        table_id: UUID,
         booking_date: date,
         start_time: time,
         end_time: time,
@@ -69,8 +181,7 @@ class CafeteriaService:
         """Check if there's an overlapping booking."""
         query = select(CafeteriaTableBooking).where(
             and_(
-                CafeteriaTableBooking.floor_plan_id == floor_plan_id,
-                CafeteriaTableBooking.table_label == table_label,
+                CafeteriaTableBooking.table_id == table_id,
                 CafeteriaTableBooking.booking_date == booking_date,
                 CafeteriaTableBooking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
                 or_(
@@ -102,19 +213,20 @@ class CafeteriaService:
         user: User
     ) -> Tuple[Optional[CafeteriaTableBooking], Optional[str]]:
         """Create a new cafeteria table booking."""
-        # Validate table cell
-        valid, error = await self.validate_table_cell(
-            booking_data.floor_plan_id,
-            booking_data.cell_row,
-            booking_data.cell_column
-        )
-        if not valid:
-            return None, error
+        # Validate table exists and is active
+        table = await self.get_table_by_id(booking_data.table_id)
+        if not table:
+            return None, "Cafeteria table not found"
+        if not table.is_active:
+            return None, "Cafeteria table is not active"
+        
+        # Check capacity
+        if booking_data.guest_count > table.capacity:
+            return None, f"Guest count exceeds table capacity ({table.capacity})"
         
         # Check for overlapping bookings
         has_overlap = await self.check_booking_overlap(
-            booking_data.floor_plan_id,
-            booking_data.table_label,
+            booking_data.table_id,
             booking_data.booking_date,
             booking_data.start_time,
             booking_data.end_time
@@ -122,16 +234,19 @@ class CafeteriaService:
         if has_overlap:
             return None, "Time slot overlaps with existing booking"
         
+        # Convert guest_names list to comma-separated string if provided
+        guest_names_str = None
+        if booking_data.guest_names:
+            guest_names_str = ",".join(booking_data.guest_names)
+        
         booking = CafeteriaTableBooking(
-            floor_plan_id=booking_data.floor_plan_id,
-            table_label=booking_data.table_label,
-            cell_row=booking_data.cell_row,
-            cell_column=booking_data.cell_column,
-            user_id=user.id,
+            table_id=booking_data.table_id,
+            user_code=user.user_code,
             booking_date=booking_data.booking_date,
             start_time=booking_data.start_time,
             end_time=booking_data.end_time,
             guest_count=booking_data.guest_count,
+            guest_names=guest_names_str,
             status=BookingStatus.CONFIRMED,
             notes=booking_data.notes
         )
@@ -148,23 +263,23 @@ class CafeteriaService:
         booking_data: CafeteriaBookingUpdate,
         user: User
     ) -> Tuple[Optional[CafeteriaTableBooking], Optional[str]]:
-        """Update a cafeteria table booking."""
+        """Update a cafeteria booking."""
         booking = await self.get_booking_by_id(booking_id)
         if not booking:
             return None, "Booking not found"
         
-        if str(booking.user_id) != str(user.id):
-            from ..models.enums import UserRole
-            if user.role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN]:
+        # Check ownership or admin access
+        if booking.user_code != user.user_code:
+            if not self.can_manage_cafeteria(user):
                 return None, "Cannot modify another user's booking"
         
+        # If updating time, check for overlaps
         if booking_data.start_time or booking_data.end_time:
             start = booking_data.start_time or booking.start_time
             end = booking_data.end_time or booking.end_time
             
             has_overlap = await self.check_booking_overlap(
-                booking.floor_plan_id,
-                booking.table_label,
+                booking.table_id,
                 booking.booking_date,
                 start,
                 end,
@@ -174,6 +289,11 @@ class CafeteriaService:
                 return None, "Time slot overlaps with existing booking"
         
         update_data = booking_data.model_dump(exclude_unset=True)
+        
+        # Handle guest_names conversion
+        if 'guest_names' in update_data and update_data['guest_names']:
+            update_data['guest_names'] = ",".join(update_data['guest_names'])
+        
         for field, value in update_data.items():
             setattr(booking, field, value)
         
@@ -185,59 +305,156 @@ class CafeteriaService:
     async def cancel_booking(
         self,
         booking_id: UUID,
-        user: User
+        user: User,
+        reason: Optional[str] = None
     ) -> Tuple[bool, Optional[str]]:
-        """Cancel a cafeteria table booking."""
+        """Cancel a cafeteria booking."""
         booking = await self.get_booking_by_id(booking_id)
         if not booking:
             return False, "Booking not found"
         
-        if str(booking.user_id) != str(user.id):
-            from ..models.enums import UserRole
-            if user.role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN]:
+        if booking.user_code != user.user_code:
+            if not self.can_manage_cafeteria(user):
                 return False, "Cannot cancel another user's booking"
         
+        if booking.status == BookingStatus.CANCELLED:
+            return False, "Booking is already cancelled"
+        
         booking.status = BookingStatus.CANCELLED
+        booking.cancellation_reason = reason
+        booking.cancelled_at = datetime.now(timezone.utc)
+        
         await self.db.commit()
         
         return True, None
     
     async def list_bookings(
         self,
-        floor_plan_id: Optional[UUID] = None,
-        user_id: Optional[UUID] = None,
+        table_id: Optional[UUID] = None,
+        user_code: Optional[str] = None,
         booking_date: Optional[date] = None,
         status: Optional[BookingStatus] = None,
         page: int = 1,
         page_size: int = 20
     ) -> Tuple[List[CafeteriaTableBooking], int]:
-        """List cafeteria table bookings with filtering."""
-        query = select(CafeteriaTableBooking)
+        """List cafeteria bookings with filtering."""
+        query = select(CafeteriaTableBooking).options(selectinload(CafeteriaTableBooking.table))
         count_query = select(func.count(CafeteriaTableBooking.id))
         
-        if floor_plan_id:
-            query = query.where(CafeteriaTableBooking.floor_plan_id == floor_plan_id)
-            count_query = count_query.where(CafeteriaTableBooking.floor_plan_id == floor_plan_id)
-        
-        if user_id:
-            query = query.where(CafeteriaTableBooking.user_id == user_id)
-            count_query = count_query.where(CafeteriaTableBooking.user_id == user_id)
-        
+        conditions = []
+        if table_id:
+            conditions.append(CafeteriaTableBooking.table_id == table_id)
+        if user_code:
+            conditions.append(CafeteriaTableBooking.user_code == user_code)
         if booking_date:
-            query = query.where(CafeteriaTableBooking.booking_date == booking_date)
-            count_query = count_query.where(CafeteriaTableBooking.booking_date == booking_date)
-        
+            conditions.append(CafeteriaTableBooking.booking_date == booking_date)
         if status:
-            query = query.where(CafeteriaTableBooking.status == status)
-            count_query = count_query.where(CafeteriaTableBooking.status == status)
+            conditions.append(CafeteriaTableBooking.status == status)
         
+        if conditions:
+            query = query.where(and_(*conditions))
+            count_query = count_query.where(and_(*conditions))
+        
+        # Get total count
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
         
+        # Get paginated results
+        query = query.order_by(CafeteriaTableBooking.booking_date.desc(), CafeteriaTableBooking.start_time)
         query = query.offset((page - 1) * page_size).limit(page_size)
-        query = query.order_by(CafeteriaTableBooking.booking_date, CafeteriaTableBooking.start_time)
+        result = await self.db.execute(query)
+        bookings = list(result.scalars().all())
+        
+        return bookings, total
+    
+    async def get_available_tables(
+        self,
+        booking_date: date,
+        start_time: time,
+        end_time: time,
+        min_capacity: Optional[int] = None
+    ) -> List[CafeteriaTable]:
+        """Get all available tables for a time slot."""
+        # Get all active tables
+        query = select(CafeteriaTable).where(CafeteriaTable.is_active == True)
+        
+        if min_capacity:
+            query = query.where(CafeteriaTable.capacity >= min_capacity)
         
         result = await self.db.execute(query)
-        bookings = result.scalars().all()
+        all_tables = list(result.scalars().all())
         
-        return list(bookings), total
+        # Get booked tables for the time slot
+        booked_result = await self.db.execute(
+            select(CafeteriaTableBooking.table_id).where(
+                and_(
+                    CafeteriaTableBooking.booking_date == booking_date,
+                    CafeteriaTableBooking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
+                    or_(
+                        and_(
+                            CafeteriaTableBooking.start_time <= start_time,
+                            CafeteriaTableBooking.end_time > start_time
+                        ),
+                        and_(
+                            CafeteriaTableBooking.start_time < end_time,
+                            CafeteriaTableBooking.end_time >= end_time
+                        ),
+                        and_(
+                            CafeteriaTableBooking.start_time >= start_time,
+                            CafeteriaTableBooking.end_time <= end_time
+                        )
+                    )
+                )
+            )
+        )
+        booked_table_ids = set(row[0] for row in booked_result.fetchall())
+        
+        # Filter out booked tables
+        available_tables = [t for t in all_tables if t.id not in booked_table_ids]
+        
+        return available_tables
+    
+    async def get_cafeteria_stats(self) -> dict:
+        """Get cafeteria statistics."""
+        # Total tables
+        total_result = await self.db.execute(
+            select(func.count(CafeteriaTable.id)).where(CafeteriaTable.is_active == True)
+        )
+        total_tables = total_result.scalar() or 0
+        
+        # Total capacity
+        capacity_result = await self.db.execute(
+            select(func.sum(CafeteriaTable.capacity)).where(CafeteriaTable.is_active == True)
+        )
+        total_capacity = capacity_result.scalar() or 0
+        
+        # Current bookings (today)
+        today = date.today()
+        booked_result = await self.db.execute(
+            select(func.count(CafeteriaTableBooking.id)).where(
+                and_(
+                    CafeteriaTableBooking.booking_date == today,
+                    CafeteriaTableBooking.status == BookingStatus.CONFIRMED
+                )
+            )
+        )
+        booked_tables = booked_result.scalar() or 0
+        
+        available_tables = total_tables - booked_tables
+        occupancy_percentage = (booked_tables / total_tables * 100) if total_tables > 0 else 0
+        
+        return {
+            "total_tables": total_tables,
+            "available_tables": available_tables,
+            "booked_tables": booked_tables,
+            "total_capacity": total_capacity,
+            "occupancy_percentage": round(occupancy_percentage, 2)
+        }
+    
+    async def get_today_menu(self) -> dict:
+        """Get today's cafeteria menu - placeholder."""
+        return {
+            "date": date.today().isoformat(),
+            "items": [],
+            "message": "Menu feature coming soon"
+        }

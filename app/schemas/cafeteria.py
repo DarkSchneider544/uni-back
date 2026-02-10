@@ -9,37 +9,42 @@ from ..models.enums import BookingStatus
 # ==================== Cafeteria Table Schemas ====================
 
 class CafeteriaTableBase(BaseModel):
-    """Base cafeteria table schema."""
+    """Base cafeteria table schema - simplified without location fields."""
     table_label: str = Field(..., min_length=1, max_length=50)
-    cell_row: int = Field(..., ge=0)
-    cell_column: int = Field(..., ge=0)
     capacity: int = Field(..., ge=1, le=20)
+    table_type: str = Field(default="regular", max_length=50)  # regular, high_top, booth
+    notes: Optional[str] = Field(None, max_length=500)
 
 
 class CafeteriaTableCreate(CafeteriaTableBase):
-    """Cafeteria table creation schema."""
-    floor_plan_id: UUID
+    """
+    Cafeteria table creation schema - used by CAFETERIA Manager.
+    table_code is auto-generated in the database.
+    """
+    pass
 
 
 class CafeteriaTableUpdate(BaseModel):
     """Cafeteria table update schema."""
     table_label: Optional[str] = Field(None, min_length=1, max_length=50)
     capacity: Optional[int] = Field(None, ge=1, le=20)
+    table_type: Optional[str] = Field(None, max_length=50)
     is_active: Optional[bool] = None
+    notes: Optional[str] = Field(None, max_length=500)
 
 
 class CafeteriaTableResponse(BaseModel):
-    """Cafeteria table response schema."""
+    """Cafeteria table response schema with auto-generated table_code."""
     id: UUID
-    floor_plan_id: UUID
+    table_code: str  # Auto-generated: TBL-XXXX
     table_label: str
-    cell_row: int
-    cell_column: int
     capacity: int
-    is_available: bool
+    table_type: str
     is_active: bool
-    current_booking: Optional["CafeteriaBookingResponse"] = None
+    notes: Optional[str] = None
+    created_by_code: str
     created_at: datetime
+    updated_at: datetime
     
     class Config:
         from_attributes = True
@@ -58,9 +63,7 @@ class CafeteriaTableListResponse(BaseModel):
 class CafeteriaBookingBase(BaseModel):
     """
     Base cafeteria booking schema.
-    
     Available to: EMPLOYEE, TEAM_LEAD, MANAGER roles
-    Managed by: CAFETERIA admin
     """
     booking_date: date
     start_time: time
@@ -89,7 +92,6 @@ class CafeteriaBookingBase(BaseModel):
 class CafeteriaBookingCreate(CafeteriaBookingBase):
     """
     Cafeteria booking creation schema.
-    
     Employees can book tables for themselves and guests.
     """
     table_id: UUID
@@ -123,11 +125,11 @@ class CafeteriaBookingResponse(BaseModel):
     """Cafeteria booking response schema."""
     id: UUID
     table_id: UUID
-    table_label: str  # From table
-    table_capacity: int  # From table
-    floor_plan_id: UUID  # From table
+    table_code: str
+    table_label: str
+    table_capacity: int
     user_code: str
-    user_name: str
+    user_name: Optional[str] = None
     booking_date: date
     start_time: time
     end_time: time
@@ -166,7 +168,3 @@ class CafeteriaStatistics(BaseModel):
     total_capacity: int
     current_occupancy: int
     occupancy_percentage: float
-
-
-# Forward reference resolution
-CafeteriaTableResponse.model_rebuild()

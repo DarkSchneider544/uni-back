@@ -43,56 +43,17 @@ class ManagerType(str, enum.Enum):
     Manager types - determines which department a Manager oversees.
     Each manager type has specific responsibilities.
     
-    - PARKING: Manages parking allocation and floor plan
+    - PARKING: Manages parking slots and allocations
     - ATTENDANCE: Manages attendance tracking, creates department-wise Team Leads
     - DESK_CONFERENCE: Manages desk and conference room allocation
-    - CAFETERIA: Manages cafeteria operations (Food Inventory TL, Desk Cafeteria TL)
+    - CAFETERIA: Manages cafeteria tables and food operations
     - IT_SUPPORT: Manages IT assets and support requests
     """
-    PARKING = "parking"                 # Parking Manager - parking floor plan
+    PARKING = "parking"                 # Parking Manager - parking slots
     ATTENDANCE = "attendance"           # Attendance Manager - creates department TLs
-    DESK_CONFERENCE = "desk_conference" # Desk & Conference Manager - desk area floor plan
-    CAFETERIA = "cafeteria"             # Cafeteria Manager - cafeteria floor plan, food
+    DESK_CONFERENCE = "desk_conference" # Desk & Conference Manager - desks and conference rooms
+    CAFETERIA = "cafeteria"             # Cafeteria Manager - tables, food
     IT_SUPPORT = "it_support"           # IT Support Manager - IT assets, requests
-
-
-class FloorPlanType(str, enum.Enum):
-    """
-    Types of floor plans - exactly 3 types, each managed by a specific admin.
-    Floor plan IDs are auto-generated.
-    
-    - PARKING: Managed by SECURITY admin
-    - DESK_AREA: Managed by DESK admin (includes conference rooms)
-    - CAFETERIA: Managed by CAFETERIA admin (dining area)
-    """
-    PARKING = "parking"           # Managed by SECURITY admin - parking slot layout
-    DESK_AREA = "desk_area"       # Managed by DESK admin - desk & conference room layout
-    CAFETERIA = "cafeteria"       # Managed by CAFETERIA admin - dining area layout
-
-
-class CellType(str, enum.Enum):
-    """Cell types for floor plan grid design."""
-    DESK = "desk"
-    CONFERENCE_ROOM = "conference_room"
-    PARKING_SLOT = "parking_slot"
-    CAFETERIA_TABLE = "cafeteria_table"
-    PATH = "path"
-    WALL = "wall"
-    WINDOW = "window"
-    ENTRY = "entry"
-    EXIT = "exit"
-    EMPTY = "empty"
-    RECEPTION = "reception"
-    RESTROOM = "restroom"
-
-
-class CellDirection(str, enum.Enum):
-    """Direction for cells that have orientation."""
-    UP = "up"
-    DOWN = "down"
-    LEFT = "left"
-    RIGHT = "right"
-    MULTI = "multi"
 
 
 class ParkingType(str, enum.Enum):
@@ -126,7 +87,7 @@ class BookingStatus(str, enum.Enum):
 
 
 class DeskStatus(str, enum.Enum):
-    """Status of desks in the floor plan."""
+    """Status of desks."""
     AVAILABLE = "available"
     BOOKED = "booked"
     MAINTENANCE = "maintenance"

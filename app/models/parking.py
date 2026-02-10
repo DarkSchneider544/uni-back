@@ -1,33 +1,34 @@
 from sqlalchemy import (
-    Column, String, Boolean, DateTime, ForeignKey, Text, Index, Enum, Integer
+    Column, String, Boolean, DateTime, ForeignKey, Text, Index, Enum, Integer, event
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
+import random
+import string
 
 from .base import Base, TimestampMixin
 from .enums import ParkingType, ParkingSlotStatus, VehicleType
 
 
+def generate_slot_code() -> str:
+    """Generate a unique parking slot code. Format: PKG-XXXX"""
+    digits = ''.join(random.choices(string.digits, k=4))
+    return f"PKG-{digits}"
+
+
 class ParkingSlot(Base, TimestampMixin):
     """
-    Parking slot definition from floor plan.
-    Managed by SECURITY admin.
+    Parking slot definition - managed by PARKING Manager.
+    Codes are auto-generated. Simplified without location fields.
     """
     __tablename__ = "parking_slots"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
-    # Reference to floor plan
-    floor_plan_id = Column(UUID(as_uuid=True), ForeignKey("floor_plans.id"), nullable=False)
-    
-    # Slot identification
-    slot_code = Column(String(20), unique=True, nullable=False, index=True)  # e.g., A-01, B-02
+    # Slot identification - auto-generated
+    slot_code = Column(String(20), unique=True, nullable=False, index=True)
     slot_label = Column(String(50), nullable=False)
-    
-    # Grid position
-    cell_row = Column(Integer, nullable=False)
-    cell_column = Column(Integer, nullable=False)
     
     # Slot properties
     parking_type = Column(Enum(ParkingType), nullable=False, default=ParkingType.EMPLOYEE)
@@ -37,13 +38,25 @@ class ParkingSlot(Base, TimestampMixin):
     is_active = Column(Boolean, default=True)
     notes = Column(Text, nullable=True)
     
+    # Created by - using user_code
+    created_by_code = Column(String(10), ForeignKey("users.user_code"), nullable=False)
+    
     # Relationships
-    floor_plan = relationship("FloorPlan")
+    allocations = relationship("ParkingAllocation", back_populates="slot")
+    created_by = relationship("User", foreign_keys=[created_by_code], primaryjoin="ParkingSlot.created_by_code == User.user_code")
     
     __table_args__ = (
-        Index("ix_parking_slots_floor", "floor_plan_id"),
         Index("ix_parking_slots_status", "status"),
+        Index("ix_parking_slots_type", "parking_type"),
     )
+
+
+# Auto-generate slot_code before insert
+@event.listens_for(ParkingSlot, 'before_insert')
+def generate_slot_code_before_insert(mapper, connection, target):
+    """Auto-generate a unique parking slot code before inserting."""
+    if not target.slot_code:
+        target.slot_code = generate_slot_code()
 
 
 class ParkingAllocation(Base, TimestampMixin):
@@ -81,7 +94,7 @@ class ParkingAllocation(Base, TimestampMixin):
     notes = Column(Text, nullable=True)
     
     # Relationships
-    slot = relationship("ParkingSlot")
+    slot = relationship("ParkingSlot", back_populates="allocations")
     user = relationship("User", foreign_keys=[user_code], primaryjoin="ParkingAllocation.user_code == User.user_code")
     
     __table_args__ = (
@@ -100,31 +113,28 @@ class ParkingHistory(Base, TimestampMixin):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
-    # References
-    allocation_id = Column(UUID(as_uuid=True), nullable=False)  # Original allocation ID
-    slot_id = Column(UUID(as_uuid=True), ForeignKey("parking_slots.id"), nullable=False)
+    # Original allocation reference
+    allocation_id = Column(UUID(as_uuid=True), nullable=False)
+    slot_id = Column(UUID(as_uuid=True), nullable=False)
     slot_code = Column(String(20), nullable=False)
     
-    # User/Visitor info
+    # Parking type
     parking_type = Column(Enum(ParkingType), nullable=False)
-    user_code = Column(String(10), ForeignKey("users.user_code"), nullable=True)
+    
+    # User/Visitor info
+    user_code = Column(String(10), nullable=True)
     visitor_name = Column(String(200), nullable=True)
     
     # Vehicle info
-    vehicle_number = Column(String(50), nullable=False)
+    vehicle_number = Column(String(50), nullable=True)
     vehicle_type = Column(Enum(VehicleType), nullable=False)
     
     # Timing
     entry_time = Column(DateTime(timezone=True), nullable=False)
-    exit_time = Column(DateTime(timezone=True), nullable=False)
+    exit_time = Column(DateTime(timezone=True), nullable=True)
     duration_minutes = Column(Integer, nullable=True)
-    
-    # Relationships
-    slot = relationship("ParkingSlot")
-    user = relationship("User", foreign_keys=[user_code], primaryjoin="ParkingHistory.user_code == User.user_code")
     
     __table_args__ = (
         Index("ix_parking_history_user", "user_code"),
-        Index("ix_parking_history_slot", "slot_id"),
-        Index("ix_parking_history_date", "entry_time"),
+        Index("ix_parking_history_entry", "entry_time"),
     )

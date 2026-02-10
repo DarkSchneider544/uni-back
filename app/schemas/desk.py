@@ -9,43 +9,44 @@ from ..models.enums import BookingStatus, DeskStatus
 # ==================== Desk Schemas ====================
 
 class DeskBase(BaseModel):
-    """Base desk schema."""
+    """Base desk schema - simplified without location fields."""
     desk_label: str = Field(..., min_length=1, max_length=50)
-    cell_row: int = Field(..., ge=0)
-    cell_column: int = Field(..., ge=0)
-    has_monitor: bool = False
-    has_keyboard: bool = False
+    has_monitor: bool = True
     has_docking_station: bool = False
+    notes: Optional[str] = Field(None, max_length=500)
 
 
 class DeskCreate(DeskBase):
-    """Desk creation schema."""
-    floor_plan_id: UUID
+    """
+    Desk creation schema - used by DESK_CONFERENCE Manager.
+    desk_code is auto-generated in the database.
+    """
+    pass
 
 
 class DeskUpdate(BaseModel):
     """Desk update schema."""
     desk_label: Optional[str] = Field(None, min_length=1, max_length=50)
     has_monitor: Optional[bool] = None
-    has_keyboard: Optional[bool] = None
     has_docking_station: Optional[bool] = None
+    status: Optional[DeskStatus] = None
     is_active: Optional[bool] = None
+    notes: Optional[str] = Field(None, max_length=500)
 
 
 class DeskResponse(BaseModel):
-    """Desk response schema."""
+    """Desk response schema with auto-generated desk_code."""
     id: UUID
-    floor_plan_id: UUID
+    desk_code: str  # Auto-generated: DSK-XXXX
     desk_label: str
-    cell_row: int
-    cell_column: int
     status: DeskStatus
     has_monitor: bool
-    has_keyboard: bool
     has_docking_station: bool
     is_active: bool
-    current_booking: Optional["DeskBookingResponse"] = None
+    notes: Optional[str] = None
+    created_by_code: str
     created_at: datetime
+    updated_at: datetime
     
     class Config:
         from_attributes = True
@@ -64,9 +65,7 @@ class DeskListResponse(BaseModel):
 class DeskBookingBase(BaseModel):
     """
     Base desk booking schema.
-    
     Available to: EMPLOYEE, TEAM_LEAD, MANAGER roles
-    Managed by: DESK admin
     """
     booking_date: date
     start_time: time
@@ -85,8 +84,7 @@ class DeskBookingBase(BaseModel):
 class DeskBookingCreate(DeskBookingBase):
     """
     Desk booking creation schema.
-    
-    Employees can book their own desk.
+    Employees can book any active desk.
     """
     desk_id: UUID
     
@@ -123,16 +121,16 @@ class DeskBookingResponse(BaseModel):
     """Desk booking response schema."""
     id: UUID
     desk_id: UUID
-    desk_label: str  # From desk
-    floor_plan_id: UUID  # From desk
+    desk_code: str
+    desk_label: str
     user_code: str
-    user_name: str
+    user_name: Optional[str] = None
     booking_date: date
     start_time: time
     end_time: time
     status: BookingStatus
-    check_in_time: Optional[datetime] = None
-    check_out_time: Optional[datetime] = None
+    checked_in_at: Optional[datetime] = None
+    checked_out_at: Optional[datetime] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -158,44 +156,50 @@ class MyDeskBookingResponse(BaseModel):
 # ==================== Conference Room Schemas ====================
 
 class ConferenceRoomBase(BaseModel):
-    """Base conference room schema."""
-    room_label: str = Field(..., min_length=1, max_length=50)
-    cell_row: int = Field(..., ge=0)
-    cell_column: int = Field(..., ge=0)
+    """Base conference room schema - simplified with only essential fields."""
+    room_label: str = Field(..., min_length=1, max_length=100)
     capacity: int = Field(..., ge=1, le=100)
     has_projector: bool = False
-    has_whiteboard: bool = False
+    has_whiteboard: bool = True
     has_video_conferencing: bool = False
+    notes: Optional[str] = Field(None, max_length=500)
 
 
 class ConferenceRoomCreate(ConferenceRoomBase):
-    """Conference room creation schema."""
-    floor_plan_id: UUID
+    """
+    Conference room creation schema - used by DESK_CONFERENCE Manager.
+    room_code is auto-generated in the database.
+    """
+    pass
 
 
 class ConferenceRoomUpdate(BaseModel):
     """Conference room update schema."""
-    room_label: Optional[str] = Field(None, min_length=1, max_length=50)
+    room_label: Optional[str] = Field(None, min_length=1, max_length=100)
     capacity: Optional[int] = Field(None, ge=1, le=100)
     has_projector: Optional[bool] = None
     has_whiteboard: Optional[bool] = None
     has_video_conferencing: Optional[bool] = None
+    status: Optional[DeskStatus] = None
     is_active: Optional[bool] = None
+    notes: Optional[str] = Field(None, max_length=500)
 
 
 class ConferenceRoomResponse(BaseModel):
-    """Conference room response schema."""
+    """Conference room response schema with auto-generated room_code."""
     id: UUID
-    floor_plan_id: UUID
+    room_code: str  # Auto-generated: CNF-XXXX
     room_label: str
-    cell_row: int
-    cell_column: int
     capacity: int
     has_projector: bool
     has_whiteboard: bool
     has_video_conferencing: bool
+    status: DeskStatus
     is_active: bool
+    notes: Optional[str] = None
+    created_by_code: str
     created_at: datetime
+    updated_at: datetime
     
     class Config:
         from_attributes = True
@@ -214,7 +218,8 @@ class ConferenceRoomBookingBase(BaseModel):
     booking_date: date
     start_time: time
     end_time: time
-    purpose: str = Field(..., min_length=1, max_length=200)
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
     attendees_count: int = Field(..., ge=1)
     notes: Optional[str] = Field(None, max_length=500)
     
@@ -243,7 +248,8 @@ class ConferenceRoomBookingUpdate(BaseModel):
     """Conference room booking update schema."""
     start_time: Optional[time] = None
     end_time: Optional[time] = None
-    purpose: Optional[str] = Field(None, min_length=1, max_length=200)
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
     attendees_count: Optional[int] = Field(None, ge=1)
     notes: Optional[str] = None
 
@@ -252,14 +258,16 @@ class ConferenceRoomBookingResponse(BaseModel):
     """Conference room booking response schema."""
     id: UUID
     room_id: UUID
-    room_label: str  # From room
-    capacity: int  # From room
+    room_code: str
+    room_label: str
+    capacity: int
     user_code: str
-    user_name: str
+    user_name: Optional[str] = None
     booking_date: date
     start_time: time
     end_time: time
-    purpose: str
+    title: str
+    description: Optional[str] = None
     attendees_count: int
     status: BookingStatus
     notes: Optional[str] = None
@@ -289,7 +297,3 @@ class DeskStatistics(BaseModel):
     occupancy_percentage: float
     total_conference_rooms: int
     conference_rooms_in_use: int
-
-
-# Forward reference resolution
-DeskResponse.model_rebuild()

@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from .endpoints import (
-    auth, users, floor_plans, parking,
+    auth, users, parking,
     desks, cafeteria, food_orders, attendance, leave,
     it_assets, it_requests, projects, search, holidays
 )
@@ -10,7 +10,6 @@ api_router = APIRouter()
 
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 api_router.include_router(users.router, prefix="/users", tags=["Users"])
-api_router.include_router(floor_plans.router, prefix="/floor-plans", tags=["Floor Plans"])
 api_router.include_router(parking.router, prefix="/parking", tags=["Parking"])
 api_router.include_router(desks.router, prefix="/desks", tags=["Desk Booking"])
 api_router.include_router(cafeteria.router, prefix="/cafeteria", tags=["Cafeteria"])
