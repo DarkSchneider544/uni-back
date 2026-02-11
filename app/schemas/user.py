@@ -61,9 +61,9 @@ class UserCreate(UserBase):
     # Admin assignment - optional, auto-assigned if not provided  
     admin_code: Optional[str] = None
     
-    # Vehicle info (for parking services)
-    vehicle_number: Optional[str] = None
-    vehicle_type: Optional[VehicleType] = None
+    # Vehicle info (for parking services) - Required for all users
+    vehicle_number: str = Field(..., min_length=4, max_length=20, description="Vehicle number (required)")
+    vehicle_type: VehicleType = Field(default=VehicleType.CAR, description="Vehicle type (defaults to car)")
     
     @model_validator(mode='after')
     def validate_role_fields(self):

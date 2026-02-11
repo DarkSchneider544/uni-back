@@ -243,7 +243,11 @@ class ParkingService:
         allocation_data: ParkingAllocationCreate,
         user: User
     ) -> Tuple[Optional[ParkingAllocation], Optional[str]]:
-        """Create a new parking allocation for employee."""
+        """Create a new parking allocation for employee - auto-fills vehicle info from user profile."""
+        # Check if user has vehicle info
+        if not user.vehicle_number:
+            return None, "Please update your profile with vehicle number before parking"
+        
         # Check if user already has active parking
         existing = await self.check_user_active_parking(user.user_code)
         if existing:
@@ -265,12 +269,13 @@ class ParkingService:
         if not is_available:
             return None, "Parking slot is already occupied"
         
+        # Auto-fill vehicle info from user profile
         allocation = ParkingAllocation(
             slot_id=allocation_data.slot_id,
             user_code=user.user_code,
             parking_type=ParkingType.EMPLOYEE,
-            vehicle_number=allocation_data.vehicle_number,
-            vehicle_type=allocation_data.vehicle_type,
+            vehicle_number=user.vehicle_number,  # Auto-filled from user
+            vehicle_type=user.vehicle_type or VehicleType.CAR,  # Auto-filled from user
             entry_time=datetime.now(timezone.utc),
             is_active=True,
             notes=allocation_data.notes

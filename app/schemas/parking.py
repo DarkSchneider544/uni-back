@@ -69,24 +69,15 @@ class ParkingAllocationBase(BaseModel):
     Base parking allocation schema.
     Available to: EMPLOYEE, TEAM_LEAD, MANAGER roles
     """
-    vehicle_number: str = Field(..., min_length=4, max_length=20)
-    vehicle_type: VehicleType = VehicleType.CAR
     notes: Optional[str] = Field(None, max_length=500)
 
 
 class ParkingAllocationCreate(ParkingAllocationBase):
     """
     Parking allocation creation schema for employees.
-    Employee books their own parking.
+    Employee books their own parking - vehicle info auto-filled from user profile.
     """
     slot_id: UUID
-    
-    @field_validator('vehicle_number')
-    @classmethod
-    def validate_vehicle_number(cls, v):
-        if not re.match(r'^[A-Z0-9\s-]{4,20}$', v.upper()):
-            raise ValueError('Invalid vehicle number format')
-        return v.upper()
 
 
 class VisitorParkingCreate(BaseModel):
@@ -116,6 +107,14 @@ class ParkingAllocationUpdate(BaseModel):
     vehicle_number: Optional[str] = None
     vehicle_type: Optional[VehicleType] = None
     notes: Optional[str] = None
+
+
+class ParkingEntryExit(BaseModel):
+    """
+    Simple schema for parking entry/exit - just a button action.
+    All details auto-filled from user profile and allocation.
+    """
+    pass  # No fields needed, everything auto-filled
 
 
 class ParkingCheckInOut(BaseModel):

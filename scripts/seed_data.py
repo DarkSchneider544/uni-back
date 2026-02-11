@@ -47,7 +47,9 @@ async def seed_users(db: AsyncSession):
             "last_name": "Admin",
             "role": UserRole.SUPER_ADMIN,
             "manager_type": None,
-            "department": "Administration"
+            "department": "Administration",
+            "vehicle_number": "GJ01SA1001",
+            "vehicle_type": VehicleType.CAR
         },
         # Admin
         {
@@ -58,7 +60,9 @@ async def seed_users(db: AsyncSession):
             "last_name": "Admin",
             "role": UserRole.ADMIN,
             "manager_type": None,
-            "department": "Administration"
+            "department": "Administration",
+            "vehicle_number": "GJ01AD2001",
+            "vehicle_type": VehicleType.CAR
         },
         # Parking Manager
         {
@@ -69,7 +73,9 @@ async def seed_users(db: AsyncSession):
             "last_name": "Kumar",
             "role": UserRole.MANAGER,
             "manager_type": ManagerType.PARKING,
-            "department": "Facilities"
+            "department": "Facilities",
+            "vehicle_number": "GJ01PM3001",
+            "vehicle_type": VehicleType.CAR
         },
         # Attendance Manager
         {
@@ -80,7 +86,9 @@ async def seed_users(db: AsyncSession):
             "last_name": "Sharma",
             "role": UserRole.MANAGER,
             "manager_type": ManagerType.ATTENDANCE,
-            "department": "HR"
+            "department": "HR",
+            "vehicle_number": "GJ01AM3002",
+            "vehicle_type": VehicleType.CAR
         },
         # Desk & Conference Manager
         {
@@ -91,7 +99,9 @@ async def seed_users(db: AsyncSession):
             "last_name": "Patel",
             "role": UserRole.MANAGER,
             "manager_type": ManagerType.DESK_CONFERENCE,
-            "department": "Facilities"
+            "department": "Facilities",
+            "vehicle_number": "GJ01DM3003",
+            "vehicle_type": VehicleType.CAR
         },
         # Cafeteria Manager
         {
@@ -102,7 +112,9 @@ async def seed_users(db: AsyncSession):
             "last_name": "Gupta",
             "role": UserRole.MANAGER,
             "manager_type": ManagerType.CAFETERIA,
-            "department": "Food Services"
+            "department": "Food Services",
+            "vehicle_number": "GJ01CM3004",
+            "vehicle_type": VehicleType.CAR
         },
         # IT Support Manager
         {
@@ -113,7 +125,9 @@ async def seed_users(db: AsyncSession):
             "last_name": "Singh",
             "role": UserRole.MANAGER,
             "manager_type": ManagerType.IT_SUPPORT,
-            "department": "IT"
+            "department": "IT",
+            "vehicle_number": "GJ01IT3005",
+            "vehicle_type": VehicleType.CAR
         },
         # Team Leads
         {
@@ -124,7 +138,9 @@ async def seed_users(db: AsyncSession):
             "last_name": "Verma",
             "role": UserRole.TEAM_LEAD,
             "manager_type": None,
-            "department": "Development"
+            "department": "Development",
+            "vehicle_number": "GJ01TL4001",
+            "vehicle_type": VehicleType.CAR
         },
         {
             "user_code": "4002",
@@ -134,7 +150,9 @@ async def seed_users(db: AsyncSession):
             "last_name": "Desai",
             "role": UserRole.TEAM_LEAD,
             "manager_type": None,
-            "department": "Sales"
+            "department": "Sales",
+            "vehicle_number": "GJ01TL4002",
+            "vehicle_type": VehicleType.CAR
         },
         # Employees
         {
@@ -145,7 +163,9 @@ async def seed_users(db: AsyncSession):
             "last_name": "Johnson",
             "role": UserRole.EMPLOYEE,
             "manager_type": None,
-            "department": "Development"
+            "department": "Development",
+            "vehicle_number": "GJ01EM5001",
+            "vehicle_type": VehicleType.CAR
         },
         {
             "user_code": "5002",
@@ -155,7 +175,9 @@ async def seed_users(db: AsyncSession):
             "last_name": "Smith",
             "role": UserRole.EMPLOYEE,
             "manager_type": None,
-            "department": "Development"
+            "department": "Development",
+            "vehicle_number": "GJ01EM5002",
+            "vehicle_type": VehicleType.CAR
         },
         {
             "user_code": "5003",
@@ -165,7 +187,9 @@ async def seed_users(db: AsyncSession):
             "last_name": "Brown",
             "role": UserRole.EMPLOYEE,
             "manager_type": None,
-            "department": "Sales"
+            "department": "Sales",
+            "vehicle_number": "GJ01EM5003",
+            "vehicle_type": VehicleType.CAR
         },
         {
             "user_code": "5004",
@@ -175,7 +199,9 @@ async def seed_users(db: AsyncSession):
             "last_name": "Williams",
             "role": UserRole.EMPLOYEE,
             "manager_type": None,
-            "department": "HR"
+            "department": "HR",
+            "vehicle_number": "GJ01EM5004",
+            "vehicle_type": VehicleType.CAR
         },
         {
             "user_code": "5005",
@@ -185,7 +211,9 @@ async def seed_users(db: AsyncSession):
             "last_name": "Davis",
             "role": UserRole.EMPLOYEE,
             "manager_type": None,
-            "department": "IT"
+            "department": "IT",
+            "vehicle_number": "GJ01EM5005",
+            "vehicle_type": VehicleType.CAR
         },
     ]
     
@@ -211,6 +239,8 @@ async def seed_users(db: AsyncSession):
             role=user_data["role"],
             manager_type=user_data.get("manager_type"),
             department=user_data.get("department"),
+            vehicle_number=user_data["vehicle_number"],
+            vehicle_type=user_data.get("vehicle_type", VehicleType.CAR),
             is_active=True
         )
         db.add(user)
@@ -250,12 +280,10 @@ async def seed_desks(db: AsyncSession, users: list):
             desk_label=label,
             status=DeskStatus.AVAILABLE,
             has_monitor=random.choice([True, False]),
-            has_keyboard=True,
-            has_mouse=True,
-            has_headset=random.choice([True, False]),
+            has_docking_station=random.choice([True, False]),
             notes=f"Desk {i+1} of 10 - auto-seeded",
             is_active=True,
-            created_by_id=desk_manager.id
+            created_by_code=desk_manager.user_code
         )
         db.add(desk)
         print(f"  Created desk: {desk_code} - {label}")
@@ -278,11 +306,11 @@ async def seed_conference_rooms(db: AsyncSession, users: list):
         return
     
     rooms = [
-        {"label": "Board Room", "capacity": 20, "has_projector": True, "has_tv": True, "has_whiteboard": True, "has_video_conferencing": True},
-        {"label": "Meeting Room Alpha", "capacity": 8, "has_projector": True, "has_tv": False, "has_whiteboard": True, "has_video_conferencing": True},
-        {"label": "Meeting Room Beta", "capacity": 6, "has_projector": False, "has_tv": True, "has_whiteboard": True, "has_video_conferencing": False},
-        {"label": "Huddle Space 1", "capacity": 4, "has_projector": False, "has_tv": True, "has_whiteboard": False, "has_video_conferencing": False},
-        {"label": "Interview Room", "capacity": 3, "has_projector": False, "has_tv": False, "has_whiteboard": True, "has_video_conferencing": True},
+        {"label": "Board Room", "capacity": 20, "has_projector": True, "has_whiteboard": True, "has_video_conferencing": True},
+        {"label": "Meeting Room Alpha", "capacity": 8, "has_projector": True, "has_whiteboard": True, "has_video_conferencing": True},
+        {"label": "Meeting Room Beta", "capacity": 6, "has_projector": False, "has_whiteboard": True, "has_video_conferencing": False},
+        {"label": "Huddle Space 1", "capacity": 4, "has_projector": False, "has_whiteboard": False, "has_video_conferencing": False},
+        {"label": "Interview Room", "capacity": 3, "has_projector": False, "has_whiteboard": True, "has_video_conferencing": True},
     ]
     
     for room_data in rooms:
@@ -293,12 +321,11 @@ async def seed_conference_rooms(db: AsyncSession, users: list):
             room_label=room_data["label"],
             capacity=room_data["capacity"],
             has_projector=room_data["has_projector"],
-            has_tv=room_data["has_tv"],
             has_whiteboard=room_data["has_whiteboard"],
             has_video_conferencing=room_data["has_video_conferencing"],
             notes=f"Conference room - auto-seeded",
             is_active=True,
-            created_by_id=desk_manager.id
+            created_by_code=desk_manager.user_code
         )
         db.add(room)
         print(f"  Created conference room: {room_code} - {room_data['label']} (capacity: {room_data['capacity']})")
@@ -329,9 +356,9 @@ async def seed_parking_slots(db: AsyncSession, users: list):
         {"label": "Employee B2", "vehicle_type": VehicleType.CAR, "parking_type": ParkingType.EMPLOYEE},
         {"label": "Bike Bay 1", "vehicle_type": VehicleType.BIKE, "parking_type": ParkingType.EMPLOYEE},
         {"label": "Bike Bay 2", "vehicle_type": VehicleType.BIKE, "parking_type": ParkingType.EMPLOYEE},
-        {"label": "Bike Bay 3", "vehicle_type": VehicleType.TWO_WHEELER, "parking_type": ParkingType.EMPLOYEE},
-        {"label": "Bike Bay 4", "vehicle_type": VehicleType.TWO_WHEELER, "parking_type": ParkingType.EMPLOYEE},
-        {"label": "Bike Bay 5", "vehicle_type": VehicleType.TWO_WHEELER, "parking_type": ParkingType.EMPLOYEE},
+        {"label": "Bike Bay 3", "vehicle_type": VehicleType.BIKE, "parking_type": ParkingType.EMPLOYEE},
+        {"label": "Bike Bay 4", "vehicle_type": VehicleType.BIKE, "parking_type": ParkingType.EMPLOYEE},
+        {"label": "Bike Bay 5", "vehicle_type": VehicleType.BIKE, "parking_type": ParkingType.EMPLOYEE},
     ]
     
     # Visitor slots (5)
@@ -356,7 +383,7 @@ async def seed_parking_slots(db: AsyncSession, users: list):
             status=ParkingSlotStatus.AVAILABLE,
             notes=f"Parking slot - auto-seeded",
             is_active=True,
-            created_by_id=parking_manager.id
+            created_by_code=parking_manager.user_code
         )
         db.add(slot)
         print(f"  Created parking slot: {slot_code} - {slot_data['label']} ({slot_data['parking_type'].value})")
@@ -399,7 +426,7 @@ async def seed_cafeteria_tables(db: AsyncSession, users: list):
             table_type=table_data["table_type"],
             notes=f"Cafeteria table - auto-seeded",
             is_active=True,
-            created_by_id=cafeteria_manager.id
+            created_by_code=cafeteria_manager.user_code
         )
         db.add(table)
         print(f"  Created cafeteria table: {table_code} - {table_data['label']} (capacity: {table_data['capacity']})")
@@ -439,12 +466,12 @@ async def seed_food_items(db: AsyncSession, users: list):
             name=item_data["name"],
             description=item_data["description"],
             price=item_data["price"],
-            category=item_data["category"],
+            category_name=item_data["category"],
             tags=item_data["tags"],
             calories=item_data["calories"],
             is_available=True,
             is_active=True,
-            created_by_id=cafeteria_manager.id
+            created_by_code=cafeteria_manager.user_code
         )
         db.add(item)
         print(f"  Created food item: {item_data['name']} (₹{item_data['price']})")
@@ -458,16 +485,16 @@ async def seed_it_assets(db: AsyncSession, users: list):
     it_manager = next((u for u in users if u.manager_type == ManagerType.IT_SUPPORT), users[0])
     
     assets = [
-        {"asset_id": "IT-LAP-001", "name": "Dell Latitude 5520", "asset_type": AssetType.LAPTOP, "serial_number": "DELL-LAP-001", "model": "Latitude 5520", "vendor": "Dell"},
-        {"asset_id": "IT-LAP-002", "name": "Dell Latitude 5520", "asset_type": AssetType.LAPTOP, "serial_number": "DELL-LAP-002", "model": "Latitude 5520", "vendor": "Dell"},
-        {"asset_id": "IT-LAP-003", "name": "MacBook Pro 14", "asset_type": AssetType.LAPTOP, "serial_number": "APPLE-MAC-001", "model": "MacBook Pro 14", "vendor": "Apple"},
-        {"asset_id": "IT-MON-001", "name": "HP Monitor 24", "asset_type": AssetType.MONITOR, "serial_number": "HP-MON-001", "model": "HP E24", "vendor": "HP"},
-        {"asset_id": "IT-MON-002", "name": "HP Monitor 24", "asset_type": AssetType.MONITOR, "serial_number": "HP-MON-002", "model": "HP E24", "vendor": "HP"},
-        {"asset_id": "IT-MON-003", "name": "Dell Monitor 27", "asset_type": AssetType.MONITOR, "serial_number": "DELL-MON-001", "model": "Dell U2722D", "vendor": "Dell"},
-        {"asset_id": "IT-KB-001", "name": "Logitech Keyboard", "asset_type": AssetType.KEYBOARD, "serial_number": "LOG-KB-001", "model": "K120", "vendor": "Logitech"},
-        {"asset_id": "IT-KB-002", "name": "Logitech Keyboard", "asset_type": AssetType.KEYBOARD, "serial_number": "LOG-KB-002", "model": "K120", "vendor": "Logitech"},
-        {"asset_id": "IT-MS-001", "name": "Logitech Mouse", "asset_type": AssetType.MOUSE, "serial_number": "LOG-MS-001", "model": "M100", "vendor": "Logitech"},
-        {"asset_id": "IT-MS-002", "name": "Logitech Mouse", "asset_type": AssetType.MOUSE, "serial_number": "LOG-MS-002", "model": "M100", "vendor": "Logitech"},
+        {"asset_code": "IT-LAP-001", "name": "Dell Latitude 5520", "asset_type": AssetType.LAPTOP, "serial_number": "DELL-LAP-001", "model": "Latitude 5520", "vendor": "Dell"},
+        {"asset_code": "IT-LAP-002", "name": "Dell Latitude 5520", "asset_type": AssetType.LAPTOP, "serial_number": "DELL-LAP-002", "model": "Latitude 5520", "vendor": "Dell"},
+        {"asset_code": "IT-LAP-003", "name": "MacBook Pro 14", "asset_type": AssetType.LAPTOP, "serial_number": "APPLE-MAC-001", "model": "MacBook Pro 14", "vendor": "Apple"},
+        {"asset_code": "IT-MON-001", "name": "HP Monitor 24", "asset_type": AssetType.MONITOR, "serial_number": "HP-MON-001", "model": "HP E24", "vendor": "HP"},
+        {"asset_code": "IT-MON-002", "name": "HP Monitor 24", "asset_type": AssetType.MONITOR, "serial_number": "HP-MON-002", "model": "HP E24", "vendor": "HP"},
+        {"asset_code": "IT-MON-003", "name": "Dell Monitor 27", "asset_type": AssetType.MONITOR, "serial_number": "DELL-MON-001", "model": "Dell U2722D", "vendor": "Dell"},
+        {"asset_code": "IT-KB-001", "name": "Logitech Keyboard", "asset_type": AssetType.KEYBOARD, "serial_number": "LOG-KB-001", "model": "K120", "vendor": "Logitech"},
+        {"asset_code": "IT-KB-002", "name": "Logitech Keyboard", "asset_type": AssetType.KEYBOARD, "serial_number": "LOG-KB-002", "model": "K120", "vendor": "Logitech"},
+        {"asset_code": "IT-MS-001", "name": "Logitech Mouse", "asset_type": AssetType.MOUSE, "serial_number": "LOG-MS-001", "model": "M100", "vendor": "Logitech"},
+        {"asset_code": "IT-MS-002", "name": "Logitech Mouse", "asset_type": AssetType.MOUSE, "serial_number": "LOG-MS-002", "model": "M100", "vendor": "Logitech"},
     ]
     
     for asset_data in assets:
@@ -481,7 +508,7 @@ async def seed_it_assets(db: AsyncSession, users: list):
             continue
         
         asset = ITAsset(
-            asset_id=asset_data["asset_id"],
+            asset_code=asset_data["asset_code"],
             name=asset_data["name"],
             asset_type=asset_data["asset_type"],
             serial_number=asset_data["serial_number"],
@@ -491,7 +518,7 @@ async def seed_it_assets(db: AsyncSession, users: list):
             is_active=True
         )
         db.add(asset)
-        print(f"  Created IT asset: {asset_data['asset_id']} - {asset_data['name']}")
+        print(f"  Created IT asset: {asset_data['asset_code']} - {asset_data['name']}")
     
     await db.commit()
 

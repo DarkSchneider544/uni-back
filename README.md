@@ -516,16 +516,11 @@ Authorization: Bearer <access_token>
 ## 3. Attendance Endpoints
 
 ### `POST /attendance/check-in`
-**Description**: Record check-in for current user
+**Description**: 🕐 **Simple check-in - just click the button!**
 
-**Authentication**: Required (all roles can use)
+**Authentication**: Required (all roles)
 
-**Request Body** (optional):
-```json
-{
-  "notes": "Started work early today"
-}
-```
+**Request Body**: None needed!
 
 **Response**:
 ```json
@@ -535,7 +530,7 @@ Authorization: Bearer <access_token>
     "id": "uuid",
     "user_code": "AB1234",
     "date": "2026-02-11",
-    "status": "draft",  // draft | pending_approval | approved | rejected
+    "status": "draft",
     "first_check_in": "09:00:00",
     "last_check_out": null,
     "total_hours": null,
@@ -545,8 +540,7 @@ Authorization: Bearer <access_token>
         "check_in": "2026-02-11T09:00:00Z",
         "check_out": null,
         "entry_type": "regular",
-        "duration_hours": null,
-        "notes": "Started work early today"
+        "duration_hours": null
       }
     ]
   },
@@ -554,25 +548,27 @@ Authorization: Bearer <access_token>
 }
 ```
 
-**Business Logic**:
-- Creates attendance record for current date if doesn't exist
+**How it works**:
+- Creates attendance record for today automatically
 - Multiple check-ins/check-outs allowed per day
-- Status starts as "draft"
+- Returns error if already checked in (must check out first)
 
 ---
 
 ### `POST /attendance/check-out`
-**Description**: Record check-out for an entry
+**Description**: 🕐 **Simple check-out - just click the button!**
 
-**Request Body**:
-```json
-{
-  "entry_id": "uuid",  // The check-in entry to check out
-  "notes": "Completed daily tasks"
-}
-```
+**Authentication**: Required (all roles)
+
+**Request Body**: None needed!
 
 **Response**: Updated attendance record with calculated duration
+
+**How it works**:
+- Auto-finds your open check-in entry
+- Calculates and records work duration
+- Updates total hours for the day
+- Returns error if not checked in
 
 ---
 
@@ -820,156 +816,267 @@ Authorization: Bearer <access_token>
 
 ## 5. Parking Endpoints
 
-### `GET /parking/slots`
-**Description**: List all parking slots
+Parking is now simple and easy! Everyone can use parking (allocate/release their slot), while Parking Managers, Admins, and Super Admins have full access to manage slots.
 
-**Access**: Parking Manager or above
-
-**Query Parameters**:
-- `page`, `page_size`
-- `parking_type` (optional): two_wheeler | four_wheeler | handicapped | visitor
-- `status` (optional): available | occupied
-
-**Response**:
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "uuid",
-      "slot_code": "P-2W-001",
-      "slot_label": "Bike Slot 1",
-      "parking_type": "two_wheeler",
-      "status": "available",
-      "zone": "Zone A",
-      "is_active": true,
-      "created_by_code": "AD0001"
-    }
-  ],
-  "total": 50,
-  "page": 1,
-  "page_size": 20
-}
-```
-
----
-
-### `POST /parking/slots`
-**Description**: Create a parking slot
-
-**Access**: Parking Manager only
-
-**Request Body**:
-```json
-{
-  "slot_label": "Bike Slot 15",
-  "parking_type": "two_wheeler",
-  "zone": "Zone B",
-  "notes": "Near main entrance"
-}
-```
-
-**Response**: Created parking slot
-
-**Note**: `slot_code` is auto-generated (e.g., P-2W-015)
-
----
-
-### `PUT /parking/slots/{slot_id}`
-**Description**: Update parking slot
-
-**Access**: Parking Manager only
-
----
-
-### `DELETE /parking/slots/{slot_id}`
-**Description**: Delete parking slot
-
-**Access**: Parking Manager only
-
----
+### **User Operations (Everyone)**
 
 ### `POST /parking/allocate`
-**Description**: Allocate parking slot to a user
+**Description**: 🅿️ **Get a parking slot - just click the button!**
 
-**Access**: Parking Manager only
+**Authentication**: Required
 
-**Request Body**:
-```json
-{
-  "user_id": "uuid",
-  "slot_id": "uuid",
-  "valid_from": "2026-02-11",  // Optional
-  "valid_until": "2026-03-11",  // Optional - for temporary allocation
-  "notes": "Permanent allocation"
-}
-```
-
-**Response**: Allocation record
-
----
-
-### `GET /parking/my-allocation`
-**Description**: Get current user's parking allocation
+**Request Body**: None (everything auto-filled!)
 
 **Response**:
 ```json
 {
   "success": true,
   "data": {
-    "allocation_id": "uuid",
-    "slot": {
-      "slot_code": "P-4W-005",
-      "slot_label": "Car Slot 5",
-      "parking_type": "four_wheeler",
-      "zone": "Zone A"
-    },
-    "valid_from": "2026-02-01",
-    "valid_until": null,
-    "is_active": true
-  }
+    "message": "Parking allocated successfully",
+    "slot_code": "A-01",
+    "vehicle_number": "ABC123",
+    "vehicle_type": "car",
+    "entry_time": "2026-02-11T09:00:00Z"
+  },
+  "message": "Parking allocated successfully"
 }
 ```
 
+**How it works**:
+- Auto-assigns first available parking slot
+- Uses vehicle info from your profile
+- One parking per user at a time
+
+**Error Cases**:
+- `400`: Already have active parking or no vehicle number in profile
+- `404`: No available parking slots
+
 ---
 
-### `POST /parking/entry`
-**Description**: Record parking entry
+### `POST /parking/release`
+**Description**: 🚗 **Release your parking slot - just click the button!**
 
-**Request Body**:
+**Authentication**: Required
+
+**Request Body**: None (everything auto-filled!)
+
+**Response**:
 ```json
 {
-  "allocation_id": "uuid",  // Optional if user has allocation
-  "vehicle_number": "ABC123",  // Optional, uses user's vehicle_number
-  "notes": "Visitor parking"
+  "success": true,
+  "data": {
+    "message": "Parking released successfully",
+    "slot_code": "A-01",
+    "vehicle_number": "ABC123",
+    "entry_time": "2026-02-11T09:00:00Z",
+    "exit_time": "2026-02-11T18:00:00Z",
+    "duration_mins": 540
+  },
+  "message": "Parking released successfully"
 }
 ```
 
-**Response**: Entry record with entry_time
+**How it works**:
+- Auto-finds your active parking
+- Calculates parking duration
+- Frees up the slot for others
+
+**Error Cases**:
+- `404`: No active parking found
 
 ---
 
-### `POST /parking/exit`
-**Description**: Record parking exit
+### `GET /parking/my-slot`
+**Description**: 📍 **Check your current parking status**
 
-**Request Body**:
+**Authentication**: Required
+
+**Response (has parking)**:
 ```json
 {
-  "history_id": "uuid"  // The parking history entry
+  "success": true,
+  "data": {
+    "has_active_parking": true,
+    "slot": {"id": "uuid", "slot_code": "A-01"},
+    "vehicle": {"vehicle_number": "ABC123", "vehicle_type": "car"},
+    "entry_time": "2026-02-11T09:00:00Z"
+  },
+  "message": "Active parking found"
 }
 ```
 
-**Response**: Updated history with exit_time and duration
+**Response (no parking)**:
+```json
+{
+  "success": true,
+  "data": {
+    "has_active_parking": false,
+    "slot": null,
+    "vehicle": {"vehicle_number": "ABC123", "vehicle_type": "car"},
+    "entry_time": null
+  },
+  "message": "No active parking"
+}
+```
 
 ---
 
-### `GET /parking/history`
-**Description**: Get parking entry/exit history
+### **Admin Operations (Parking Manager, Admin, Super Admin)**
+
+### `GET /parking/slots/summary`
+**Description**: 📊 Get parking slot statistics
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "total": 15,
+    "available": 10,
+    "occupied": 5,
+    "disabled": 0
+  },
+  "message": "Parking statistics retrieved"
+}
+```
+
+---
+
+### `GET /parking/slots/list`
+**Description**: 📋 List all parking slots with occupant details
 
 **Query Parameters**:
-- `page`, `page_size`
-- `user_id` (optional): Parking Manager only
-- `start_date`, `end_date`
+- `skip` (optional): Offset for pagination (default: 0)
+- `limit` (optional): Max results (default: 100)
+- `status` (optional): AVAILABLE | OCCUPIED | DISABLED
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "total": 15,
+    "slots": [
+      {
+        "id": "uuid",
+        "slot_code": "A-01",
+        "status": "available",
+        "current_occupant": null,
+        "vehicle_number": null
+      }
+    ]
+  },
+  "message": "Slots retrieved successfully"
+}
+```
+
+---
+
+### `POST /parking/slots/create`
+**Description**: ➕ Create a new parking slot
+
+**Access**: Parking Manager, Admin, Super Admin only
+
+**Query Parameters**:
+- `slot_code` (required): Unique slot code (e.g., A-01, B-05)
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "slot_code": "A-01",
+    "status": "available"
+  },
+  "message": "Slot created successfully"
+}
+```
+
+---
+
+### `DELETE /parking/slots/delete/{slot_code}`
+**Description**: 🗑️ Delete a parking slot
+
+**Access**: Parking Manager, Admin, Super Admin only
+
+**Note**: Cannot delete occupied slots
+
+---
+
+### `POST /parking/slots/change-status/{slot_code}`
+**Description**: 🔄 Change slot status
+
+**Access**: Parking Manager, Admin, Super Admin only
+
+**Query Parameters**:
+- `new_status` (required): AVAILABLE | OCCUPIED | DISABLED
+
+**Note**: If changing from OCCUPIED to AVAILABLE, auto-releases parking
+
+---
+
+### `POST /parking/slots/assign-visitor`
+**Description**: 👤 Assign a slot to a visitor
+
+**Access**: Parking Manager, Admin, Super Admin only
+
+**Query Parameters**:
+- `visitor_name` (required): Visitor's name
+- `vehicle_number` (required): Vehicle number
+- `vehicle_type` (optional): CAR or BIKE (default: CAR)
+- `slot_code` (required): Slot code to assign
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Visitor assigned to slot successfully",
+    "slot_code": "A-01",
+    "visitor_name": "John Smith",
+    "vehicle_number": "XYZ789"
+  },
+  "message": "Visitor assigned to slot successfully"
+}
+```
+
+---
+
+### `GET /parking/logs/list`
+**Description**: 📜 Get parking history logs
+
+**Access**: Parking Manager, Admin, Super Admin only
+
+**Query Parameters**:
+- `page` (optional): Page number (default: 1)
+- `page_size` (optional): Items per page (default: 20)
+- `is_active` (optional): Filter by active/inactive allocations
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "total": 100,
+    "page": 1,
+    "page_size": 20,
+    "logs": [
+      {
+        "id": "uuid",
+        "user_name": "John Doe",
+        "slot_code": "A-01",
+        "vehicle_number": "ABC123",
+        "entry_time": "2026-02-11T09:00:00Z",
+        "exit_time": "2026-02-11T18:00:00Z",
+        "duration_mins": 540,
+        "is_active": false
+      }
+    ]
+  },
+  "message": "Parking logs retrieved"
+}
+```
 
 ---
 

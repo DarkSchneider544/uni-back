@@ -46,21 +46,22 @@ class FoodService:
             description=item_data.description,
             ingredients=item_data.ingredients,
             tags=item_data.tags,
-            category=item_data.category
+            category=item_data.category_name
         )
         embedding = await self.embedding_service.generate_embedding(text_for_embedding)
         
         food_item = FoodItem(
             name=item_data.name,
             description=item_data.description,
-            category=item_data.category,
+            category_id=item_data.category_id,
+            category_name=item_data.category_name or "Uncategorized",
             price=item_data.price,
             ingredients=item_data.ingredients,
             tags=item_data.tags,
             calories=item_data.calories,
             preparation_time_minutes=item_data.preparation_time_minutes,
             image_url=item_data.image_url,
-            created_by_id=created_by.id,
+            created_by_code=created_by.user_code,
             embedding=embedding
         )
         
@@ -85,13 +86,13 @@ class FoodService:
             setattr(food_item, field, value)
         
         # Regenerate embedding if relevant fields changed
-        if any(f in update_data for f in ['name', 'description', 'ingredients', 'tags', 'category']):
+        if any(f in update_data for f in ['name', 'description', 'ingredients', 'tags', 'category_name']):
             text_for_embedding = self.embedding_service.prepare_food_text(
                 name=food_item.name,
                 description=food_item.description,
                 ingredients=food_item.ingredients,
                 tags=food_item.tags,
-                category=food_item.category
+                category=food_item.category_name
             )
             food_item.embedding = await self.embedding_service.generate_embedding(text_for_embedding)
         
@@ -112,8 +113,8 @@ class FoodService:
         count_query = select(func.count(FoodItem.id)).where(FoodItem.is_active == True)
         
         if category:
-            query = query.where(FoodItem.category == category)
-            count_query = count_query.where(FoodItem.category == category)
+            query = query.where(FoodItem.category_name == category)
+            count_query = count_query.where(FoodItem.category_name == category)
         
         if is_available is not None:
             query = query.where(FoodItem.is_available == is_available)
@@ -179,8 +180,10 @@ class FoodService:
         # Create order
         order = FoodOrder(
             order_number=self.generate_order_number(),
-            user_id=user.id,
+            user_code=user.user_code,
             status=OrderStatus.PENDING,
+            subtotal=total_amount,
+            tax=Decimal("0.00"),
             total_amount=total_amount,
             is_scheduled=order_data.is_scheduled,
             scheduled_date=order_data.scheduled_date,
@@ -195,6 +198,7 @@ class FoodService:
             order_item = FoodOrderItem(
                 order_id=order.id,
                 food_item_id=item["food_item"].id,
+                item_name=item["food_item"].name,
                 quantity=item["quantity"],
                 unit_price=item["unit_price"],
                 total_price=item["total_price"],
@@ -254,7 +258,7 @@ class FoodService:
     
     async def list_orders(
         self,
-        user_id: Optional[UUID] = None,
+        user_code: Optional[str] = None,
         status: Optional[OrderStatus] = None,
         page: int = 1,
         page_size: int = 20
@@ -263,9 +267,9 @@ class FoodService:
         query = select(FoodOrder).options(selectinload(FoodOrder.items))
         count_query = select(func.count(FoodOrder.id))
         
-        if user_id:
-            query = query.where(FoodOrder.user_id == user_id)
-            count_query = count_query.where(FoodOrder.user_id == user_id)
+        if user_code:
+            query = query.where(FoodOrder.user_code == user_code)
+            count_query = count_query.where(FoodOrder.user_code == user_code)
         
         if status:
             query = query.where(FoodOrder.status == status)

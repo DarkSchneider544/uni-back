@@ -25,14 +25,19 @@ router = APIRouter()
 
 @router.post("/check-in", response_model=APIResponse[AttendanceResponse])
 async def check_in(
-    check_in_data: Optional[AttendanceCheckIn] = None,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Record check-in for current user."""
+    """
+    🕐 Simple check-in - just click the button!
+    
+    No request body needed. Automatically:
+    - Creates attendance record for today
+    - Records check-in time
+    - Returns error if already checked in
+    """
     attendance_service = AttendanceService(db)
-    notes = check_in_data.notes if check_in_data else None
-    attendance, error = await attendance_service.check_in(current_user, notes)
+    attendance, error = await attendance_service.check_in(current_user)
     
     if error:
         raise HTTPException(
@@ -48,17 +53,22 @@ async def check_in(
 
 @router.post("/check-out", response_model=APIResponse[AttendanceResponse])
 async def check_out(
-    check_out_data: AttendanceCheckOut,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Record check-out for current user."""
+    """
+    🕐 Simple check-out - just click the button!
+    
+    No request body needed. Automatically:
+    - Finds your open check-in entry for today
+    - Records check-out time
+    - Calculates total hours worked
+    - Returns error if not checked in
+    
+    You can check-in and check-out multiple times per day (e.g., for lunch breaks).
+    """
     attendance_service = AttendanceService(db)
-    attendance, error = await attendance_service.check_out(
-        current_user,
-        check_out_data.entry_id,
-        check_out_data.notes
-    )
+    attendance, error = await attendance_service.check_out(current_user)
     
     if error:
         raise HTTPException(
@@ -69,6 +79,121 @@ async def check_out(
     return create_response(
         data=AttendanceResponse.model_validate(attendance),
         message="Check-out recorded successfully"
+    )
+
+
+@router.get("/my-status", response_model=dict)
+async def get_my_status(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    📊 Get your current attendance status for today.
+    
+    Returns:
+    - has_attendance: Whether you have an attendance record today
+    - is_checked_in: Whether you're currently checked in (have open entry)
+    - can_submit: Whether you can submit for approval (all entries closed)
+    - total_hours: Total hours worked today
+    - entries: List of all check-in/check-out entries
+    """
+    from datetime import datetime, timezone
+    
+    attendance_service = AttendanceService(db)
+    today = datetime.now(timezone.utc).date()
+    attendance = await attendance_service.get_user_attendance_for_date(
+        current_user.user_code, today
+    )
+    
+    if not attendance:
+        return create_response(
+            data={
+                "has_attendance": False,
+                "is_checked_in": False,
+                "can_submit": False,
+                "status": None,
+                "total_hours": 0,
+                "entries": [],
+                "attendance_id": None
+            },
+            message="No attendance record for today"
+        )
+    
+    # Check if currently checked in (has open entry)
+    is_checked_in = any(e.check_out is None for e in attendance.entries)
+    
+    # Can submit if has entries and all are closed
+    can_submit = (
+        len(attendance.entries) > 0 
+        and not is_checked_in 
+        and attendance.status == AttendanceStatus.DRAFT
+    )
+    
+    entries_data = []
+    for e in attendance.entries:
+        entries_data.append({
+            "id": str(e.id),
+            "check_in": e.check_in.isoformat() if e.check_in else None,
+            "check_out": e.check_out.isoformat() if e.check_out else None,
+            "duration_hours": float(e.duration_hours) if e.duration_hours else None,
+            "entry_type": e.entry_type,
+            "notes": e.notes
+        })
+    
+    return create_response(
+        data={
+            "has_attendance": True,
+            "is_checked_in": is_checked_in,
+            "can_submit": can_submit,
+            "status": attendance.status.value,
+            "total_hours": float(attendance.total_hours) if attendance.total_hours else 0,
+            "first_check_in": attendance.first_check_in.isoformat() if attendance.first_check_in else None,
+            "last_check_out": attendance.last_check_out.isoformat() if attendance.last_check_out else None,
+            "entries": entries_data,
+            "attendance_id": str(attendance.id)
+        },
+        message="Attendance status retrieved"
+    )
+
+
+@router.post("/submit", response_model=APIResponse[AttendanceResponse])
+async def submit_today_for_approval(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    📝 Submit today's attendance for approval - just click the button!
+    
+    Automatically submits today's attendance for manager approval.
+    Requires all check-ins to have corresponding check-outs.
+    """
+    from datetime import datetime, timezone
+    
+    attendance_service = AttendanceService(db)
+    today = datetime.now(timezone.utc).date()
+    attendance = await attendance_service.get_user_attendance_for_date(
+        current_user.user_code, today
+    )
+    
+    if not attendance:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No attendance record found for today"
+        )
+    
+    attendance, error = await attendance_service.submit_for_approval(
+        current_user, attendance.id
+    )
+    
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+    
+    return create_response(
+        data=AttendanceResponse.model_validate(attendance),
+        message="Attendance submitted for approval"
     )
 
 

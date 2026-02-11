@@ -74,7 +74,6 @@ class VehicleType(str, enum.Enum):
     """Types of vehicles for parking."""
     CAR = "car"
     BIKE = "bike"
-    TWO_WHEELER = "two_wheeler"
 
 
 class BookingStatus(str, enum.Enum):

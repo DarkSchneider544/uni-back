@@ -90,15 +90,13 @@ class AttendanceApproval(BaseModel):
 
 
 class AttendanceCheckIn(BaseModel):
-    """Check-in schema."""
-    entry_type: str = "regular"  # regular, break, overtime
-    notes: Optional[str] = None
+    """Check-in schema - empty, just click the button!"""
+    pass  # No fields needed - just click the button!
 
 
 class AttendanceCheckOut(BaseModel):
-    """Check-out schema."""
-    entry_id: UUID
-    notes: Optional[str] = None
+    """Check-out schema - empty, just click the button!"""
+    pass  # No fields needed - auto-finds open entry!
 
 
 class AttendanceSubmit(BaseModel):

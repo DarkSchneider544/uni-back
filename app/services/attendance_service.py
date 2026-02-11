@@ -107,33 +107,30 @@ class AttendanceService:
     async def check_out(
         self,
         user: User,
-        entry_id: UUID,
         notes: Optional[str] = None
     ) -> Tuple[Optional[Attendance], Optional[str]]:
         """
-        Record check-out for user.
+        Record check-out for user - auto-finds open entry.
         
         Updates last_check_out and calculates total_hours.
+        No entry_id needed - automatically finds the open check-in.
         """
         today = datetime.now(timezone.utc).date()
         now = datetime.now(timezone.utc)
         
         attendance = await self.get_user_attendance_for_date(user.user_code, today)
         if not attendance:
-            return None, "No attendance record found for today"
+            return None, "No attendance record found for today. Please check in first."
         
-        # Find the entry
+        # Find the open entry (no checkout yet)
         entry = None
         for e in attendance.entries:
-            if str(e.id) == str(entry_id):
+            if e.check_out is None:
                 entry = e
                 break
         
         if not entry:
-            return None, "Entry not found"
-        
-        if entry.check_out is not None:
-            return None, "Already checked out"
+            return None, "No open check-in found. Please check in first."
         
         entry.check_out = now
         
@@ -147,11 +144,11 @@ class AttendanceService:
         # Update attendance summary fields
         attendance.last_check_out = now.time()  # Use .time() for Time column
         
-        # Recalculate total hours
+        # Recalculate total hours (convert Decimal to float to avoid type errors)
         total_hours = 0.0
         for e in attendance.entries:
-            if e.duration_hours:
-                total_hours += e.duration_hours
+            if e.duration_hours is not None:
+                total_hours += float(e.duration_hours)
             elif e.check_out and e.check_in:
                 total_hours += (e.check_out - e.check_in).total_seconds() / 3600
         attendance.total_hours = round(total_hours, 2)

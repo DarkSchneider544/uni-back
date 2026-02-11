@@ -56,7 +56,8 @@ class FoodItemBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
     price: Decimal = Field(..., gt=0)
-    category_id: UUID
+    category_id: Optional[UUID] = None  # Optional - category_name is also stored
+    category_name: Optional[str] = None  # Category name for display
     ingredients: Optional[List[str]] = None
     tags: Optional[List[str]] = None
     calories: Optional[int] = Field(None, ge=0)
@@ -78,6 +79,7 @@ class FoodItemUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     category_id: Optional[UUID] = None
+    category_name: Optional[str] = None
     price: Optional[Decimal] = Field(None, gt=0)
     ingredients: Optional[List[str]] = None
     tags: Optional[List[str]] = None
@@ -93,19 +95,19 @@ class FoodItemResponse(BaseModel):
     id: UUID
     name: str
     description: Optional[str] = None
-    category_id: UUID
-    category_name: str
+    category_id: Optional[UUID] = None  # Can be null
+    category_name: Optional[str] = None  # Can be null
     price: Decimal
     ingredients: Optional[List[str]] = None
     tags: Optional[List[str]] = None
     calories: Optional[int] = None
-    is_available: bool
-    is_active: bool
-    preparation_time_minutes: int
+    is_available: bool = True
+    is_active: bool = True
+    preparation_time_minutes: Optional[int] = 15
     image_url: Optional[str] = None
-    created_by_code: str
-    created_at: datetime
-    updated_at: datetime
+    created_by_code: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -180,10 +182,10 @@ class FoodOrderItemResponse(BaseModel):
     """Food order item response schema."""
     id: UUID
     food_item_id: UUID
-    food_item_name: str
+    item_name: str  # Denormalized name
     quantity: int
     unit_price: Decimal
-    subtotal: Decimal
+    total_price: Decimal
     special_instructions: Optional[str] = None
     
     class Config:
@@ -195,25 +197,26 @@ class FoodOrderResponse(BaseModel):
     id: UUID
     order_number: str  # Auto-generated: ORD-YYYYMMDD-XXXX
     user_code: str
-    user_name: str
+    user_name: Optional[str] = None  # Populated from user relationship
     status: OrderStatus
-    subtotal: Decimal
-    tax: Decimal
+    subtotal: Optional[Decimal] = Decimal("0.00")
+    tax: Optional[Decimal] = Decimal("0.00")
     total_amount: Decimal
-    is_scheduled: bool
+    is_scheduled: bool = False
     scheduled_date: Optional[date] = None
     scheduled_time: Optional[time] = None
-    estimated_ready_time: Optional[datetime] = None
     items: List[FoodOrderItemResponse] = []
     notes: Optional[str] = None
+    special_instructions: Optional[str] = None
     processed_by_code: Optional[str] = None
-    processed_by_name: Optional[str] = None
-    processing_started_at: Optional[datetime] = None
+    confirmed_at: Optional[datetime] = None
+    preparing_at: Optional[datetime] = None
+    ready_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     cancelled_at: Optional[datetime] = None
     cancellation_reason: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
