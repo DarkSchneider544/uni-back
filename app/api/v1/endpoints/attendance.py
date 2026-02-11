@@ -82,7 +82,7 @@ async def check_out(
     )
 
 
-@router.get("/my-status", response_model=dict)
+@router.get("/my-status")
 async def get_my_status(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)

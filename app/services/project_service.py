@@ -271,14 +271,19 @@ class ProjectService:
         if not project:
             return None, "Project not found"
         
+        # Look up user by user_code
+        target_user = await self.get_user_by_code(member_data.user_code)
+        if not target_user:
+            return None, "User not found"
+        
         # Check if already a member
         for m in project.members:
-            if str(m.user_id) == str(member_data.user_id):
+            if m.user_code.upper() == member_data.user_code.upper():
                 return None, "User is already a project member"
         
         member = ProjectMember(
             project_id=project_id,
-            user_id=member_data.user_id,
+            user_code=member_data.user_code.upper(),
             role=member_data.role,
             is_active=True
         )

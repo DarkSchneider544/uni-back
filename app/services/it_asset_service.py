@@ -270,7 +270,11 @@ class ITAssetService:
         
         query = select(ITAssetAssignment).where(
             ITAssetAssignment.user_code == user.user_code
-        ).options(selectinload(ITAssetAssignment.asset))
+        ).options(
+            selectinload(ITAssetAssignment.asset),
+            selectinload(ITAssetAssignment.user),
+            selectinload(ITAssetAssignment.assigned_by)
+        )
         
         if active_only:
             query = query.where(ITAssetAssignment.is_active == True)

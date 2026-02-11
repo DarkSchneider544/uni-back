@@ -211,18 +211,18 @@ class CafeteriaService:
         self,
         booking_data: CafeteriaBookingCreate,
         user: User
-    ) -> Tuple[Optional[CafeteriaTableBooking], Optional[str]]:
-        """Create a new cafeteria table booking."""
+    ) -> Tuple[Optional[CafeteriaTableBooking], Optional[CafeteriaTable], Optional[str]]:
+        """Create a new cafeteria table booking. Returns (booking, table, error)."""
         # Validate table exists and is active
         table = await self.get_table_by_id(booking_data.table_id)
         if not table:
-            return None, "Cafeteria table not found"
+            return None, None, "Cafeteria table not found"
         if not table.is_active:
-            return None, "Cafeteria table is not active"
+            return None, None, "Cafeteria table is not active"
         
         # Check capacity
         if booking_data.guest_count > table.capacity:
-            return None, f"Guest count exceeds table capacity ({table.capacity})"
+            return None, None, f"Guest count exceeds table capacity ({table.capacity})"
         
         # Check for overlapping bookings
         has_overlap = await self.check_booking_overlap(
@@ -232,7 +232,7 @@ class CafeteriaService:
             booking_data.end_time
         )
         if has_overlap:
-            return None, "Time slot overlaps with existing booking"
+            return None, None, "Time slot overlaps with existing booking"
         
         # Convert guest_names list to comma-separated string if provided
         guest_names_str = None
@@ -255,7 +255,8 @@ class CafeteriaService:
         await self.db.commit()
         await self.db.refresh(booking)
         
-        return booking, None
+        # Return table along with booking to avoid lazy loading issues
+        return booking, table, None
     
     async def update_booking(
         self,

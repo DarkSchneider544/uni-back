@@ -245,18 +245,31 @@ async def get_user_leave_balance(
 ):
     """Get a user's leave balance. Manager+ required."""
     from datetime import datetime
+    from sqlalchemy import select
+    from ....models.user import User as UserModel
     
     if year is None:
         year = datetime.now().year
     
+    # Lookup user by UUID to get user_code
+    user_result = await db.execute(
+        select(UserModel).where(UserModel.id == user_id)
+    )
+    target_user = user_result.scalar_one_or_none()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
     leave_service = LeaveService(db)
-    balances = await leave_service.get_all_balances(user_id, year)
+    balances = await leave_service.get_all_balances(target_user.user_code, year)
     
     balance_responses = []
     for balance in balances:
         resp = LeaveBalanceResponse(
             id=balance.id,
-            user_id=balance.user_id,
+            user_code=balance.user_code,
             leave_type=balance.leave_type.code if balance.leave_type else None,
             year=balance.year,
             total_days=balance.total_days,

@@ -22,8 +22,10 @@ from app.models.food import FoodItem
 from app.models.it_asset import ITAsset
 from app.models.enums import (
     UserRole, ManagerType, AssetType, AssetStatus,
-    DeskStatus, ParkingSlotStatus, VehicleType, ParkingType
+    DeskStatus, ParkingSlotStatus, VehicleType, ParkingType,
+    LeaveType as LeaveTypeEnum
 )
+from app.models.leave import LeaveType
 from decimal import Decimal
 import random
 
@@ -523,6 +525,108 @@ async def seed_it_assets(db: AsyncSession, users: list):
     await db.commit()
 
 
+async def seed_leave_types(db: AsyncSession):
+    """Seed leave types configuration."""
+    leave_types = [
+        {
+            "name": "Sick Leave",
+            "code": LeaveTypeEnum.SICK,
+            "default_days": 12,
+            "is_paid": True,
+            "requires_approval": True,
+            "description": "Leave for illness or medical appointments",
+            "can_carry_forward": False,
+            "max_carry_forward_days": 0
+        },
+        {
+            "name": "Casual Leave",
+            "code": LeaveTypeEnum.CASUAL,
+            "default_days": 12,
+            "is_paid": True,
+            "requires_approval": True,
+            "description": "Personal leave for casual purposes",
+            "can_carry_forward": False,
+            "max_carry_forward_days": 0
+        },
+        {
+            "name": "Annual Leave",
+            "code": LeaveTypeEnum.ANNUAL,
+            "default_days": 15,
+            "is_paid": True,
+            "requires_approval": True,
+            "description": "Yearly vacation leave",
+            "can_carry_forward": True,
+            "max_carry_forward_days": 5
+        },
+        {
+            "name": "Unpaid Leave",
+            "code": LeaveTypeEnum.UNPAID,
+            "default_days": 0,
+            "is_paid": False,
+            "requires_approval": True,
+            "description": "Leave without pay",
+            "can_carry_forward": False,
+            "max_carry_forward_days": 0
+        },
+        {
+            "name": "Maternity Leave",
+            "code": LeaveTypeEnum.MATERNITY,
+            "default_days": 180,
+            "is_paid": True,
+            "requires_approval": True,
+            "description": "Maternity leave for new mothers",
+            "can_carry_forward": False,
+            "max_carry_forward_days": 0
+        },
+        {
+            "name": "Paternity Leave",
+            "code": LeaveTypeEnum.PATERNITY,
+            "default_days": 15,
+            "is_paid": True,
+            "requires_approval": True,
+            "description": "Paternity leave for new fathers",
+            "can_carry_forward": False,
+            "max_carry_forward_days": 0
+        },
+        {
+            "name": "Bereavement Leave",
+            "code": LeaveTypeEnum.BEREAVEMENT,
+            "default_days": 5,
+            "is_paid": True,
+            "requires_approval": True,
+            "description": "Leave for mourning the loss of a family member",
+            "can_carry_forward": False,
+            "max_carry_forward_days": 0
+        }
+    ]
+    
+    for lt_data in leave_types:
+        result = await db.execute(
+            select(LeaveType).where(LeaveType.code == lt_data["code"])
+        )
+        existing = result.scalar_one_or_none()
+        
+        if existing:
+            print(f"  Leave type already exists: {lt_data['name']}")
+            continue
+        
+        leave_type = LeaveType(
+            name=lt_data["name"],
+            code=lt_data["code"],
+            default_days=lt_data["default_days"],
+            is_paid=lt_data["is_paid"],
+            requires_approval=lt_data["requires_approval"],
+            description=lt_data["description"],
+            can_carry_forward=lt_data["can_carry_forward"],
+            max_carry_forward_days=lt_data["max_carry_forward_days"],
+            is_active=True
+        )
+        db.add(leave_type)
+        print(f"  Created leave type: {lt_data['name']} ({lt_data['default_days']} days)")
+    
+    await db.commit()
+
+
 async def main():
     """Main seed function."""
     print("\n" + "=" * 60)
@@ -552,6 +656,9 @@ async def main():
             
             print("\n7. Creating IT assets...")
             await seed_it_assets(db, users)
+            
+            print("\n8. Creating leave types...")
+            await seed_leave_types(db)
             
             print("\n" + "=" * 60)
             print("  SEED DATA COMPLETED SUCCESSFULLY!")

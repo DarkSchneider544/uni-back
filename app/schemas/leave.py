@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
@@ -33,15 +33,18 @@ class LeaveRequestCreate(BaseModel):
             raise ValueError('End date must be on or after start date')
         return v
     
-    @field_validator('half_day_type')
-    @classmethod
-    def validate_half_day(cls, v, info):
-        is_half_day = info.data.get('is_half_day')
-        if is_half_day and not v:
-            raise ValueError('half_day_type is required when is_half_day is True')
-        if v and v not in ['first_half', 'second_half']:
-            raise ValueError('half_day_type must be either first_half or second_half')
-        return v
+    @model_validator(mode='after')
+    def validate_half_day(self):
+        """Validate half_day_type based on is_half_day flag."""
+        if self.is_half_day:
+            if not self.half_day_type:
+                raise ValueError('half_day_type is required when is_half_day is True')
+            if self.half_day_type not in ['first_half', 'second_half']:
+                raise ValueError('half_day_type must be either first_half or second_half')
+        else:
+            # Clear half_day_type if is_half_day is False
+            self.half_day_type = None
+        return self
 
 
 class LeaveRequestUpdate(BaseModel):

@@ -5,7 +5,7 @@ Handles table bookings.
 Simplified API without location fields.
 """
 from datetime import date
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -51,7 +51,7 @@ async def require_cafeteria_manager(
 
 # ============== Cafeteria Table Management (Manager Only) ==============
 
-@router.post("/tables", response_model=APIResponse[dict])
+@router.post("/tables", response_model=APIResponse[CafeteriaTableResponse])
 async def create_cafeteria_table(
     table_data: CafeteriaTableCreate,
     db: AsyncSession = Depends(get_db),
@@ -71,7 +71,7 @@ async def create_cafeteria_table(
     )
 
 
-@router.get("/tables", response_model=APIResponse[dict])
+@router.get("/tables")
 async def get_all_cafeteria_tables(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -162,17 +162,17 @@ async def create_cafeteria_booking(
     Available to all authenticated users.
     """
     service = CafeteriaService(db)
-    booking, error = await service.create_booking(booking_data, current_user)
+    booking, table, error = await service.create_booking(booking_data, current_user)
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
     
-    # Build response with table details
+    # Build response with table details (use table from service to avoid lazy loading)
     response_data = {
         "id": booking.id,
         "table_id": booking.table_id,
-        "table_code": booking.table.table_code,
-        "table_label": booking.table.table_label,
-        "table_capacity": booking.table.capacity,
+        "table_code": table.table_code,
+        "table_label": table.table_label,
+        "table_capacity": table.capacity,
         "user_code": booking.user_code,
         "booking_date": booking.booking_date,
         "start_time": booking.start_time,
@@ -191,7 +191,7 @@ async def create_cafeteria_booking(
     )
 
 
-@router.get("/bookings", response_model=APIResponse[dict])
+@router.get("/bookings")
 async def get_cafeteria_bookings(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -236,7 +236,7 @@ async def get_cafeteria_bookings(
     )
 
 
-@router.get("/bookings/my", response_model=APIResponse[dict])
+@router.get("/bookings/my")
 async def get_my_cafeteria_bookings(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

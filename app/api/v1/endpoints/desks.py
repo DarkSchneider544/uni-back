@@ -312,82 +312,9 @@ async def list_conference_rooms(
     )
 
 
-@router.get("/rooms/{room_id}", response_model=APIResponse[ConferenceRoomResponse])
-async def get_conference_room(
-    room_id: UUID,
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get conference room by ID."""
-    desk_service = DeskService(db)
-    room = await desk_service.get_room_by_id(room_id)
-    
-    if not room:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Conference room not found"
-        )
-    
-    return create_response(
-        data=ConferenceRoomResponse.model_validate(room),
-        message="Conference room retrieved successfully"
-    )
-
-
-@router.put("/rooms/{room_id}", response_model=APIResponse[ConferenceRoomResponse])
-async def update_conference_room(
-    room_id: UUID,
-    room_data: ConferenceRoomUpdate,
-    current_user: User = Depends(require_desk_manager),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Update a conference room.
-    
-    **DESK_CONFERENCE Manager only**
-    """
-    desk_service = DeskService(db)
-    room, error = await desk_service.update_room(room_id, room_data, current_user)
-    
-    if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
-    
-    return create_response(
-        data=ConferenceRoomResponse.model_validate(room),
-        message="Conference room updated successfully"
-    )
-
-
-@router.delete("/rooms/{room_id}", response_model=APIResponse)
-async def delete_conference_room(
-    room_id: UUID,
-    current_user: User = Depends(require_desk_manager),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Delete a conference room (soft delete).
-    
-    **DESK_CONFERENCE Manager only**
-    """
-    desk_service = DeskService(db)
-    success, error = await desk_service.delete_room(room_id, current_user)
-    
-    if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
-    
-    return create_response(
-        data={"deleted": True},
-        message="Conference room deleted successfully"
-    )
-
-
 # ==================== Conference Room Booking APIs ====================
+# NOTE: These /rooms/bookings routes MUST be defined BEFORE /rooms/{room_id} routes
+# to prevent FastAPI from matching "bookings" as a room_id UUID
 
 @router.post("/rooms/bookings", response_model=APIResponse[ConferenceRoomBookingResponse])
 async def create_room_booking(
@@ -652,6 +579,83 @@ async def reject_room_booking(
     return create_response(
         data=response_data,
         message="Conference room booking rejected"
+    )
+
+
+# ==================== Conference Room by ID APIs (placed after bookings to avoid route conflicts) ====================
+
+@router.get("/rooms/{room_id}", response_model=APIResponse[ConferenceRoomResponse])
+async def get_conference_room(
+    room_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get conference room by ID."""
+    desk_service = DeskService(db)
+    room = await desk_service.get_room_by_id(room_id)
+    
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conference room not found"
+        )
+    
+    return create_response(
+        data=ConferenceRoomResponse.model_validate(room),
+        message="Conference room retrieved successfully"
+    )
+
+
+@router.put("/rooms/{room_id}", response_model=APIResponse[ConferenceRoomResponse])
+async def update_conference_room(
+    room_id: UUID,
+    room_data: ConferenceRoomUpdate,
+    current_user: User = Depends(require_desk_manager),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update a conference room.
+    
+    **DESK_CONFERENCE Manager only**
+    """
+    desk_service = DeskService(db)
+    room, error = await desk_service.update_room(room_id, room_data, current_user)
+    
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+    
+    return create_response(
+        data=ConferenceRoomResponse.model_validate(room),
+        message="Conference room updated successfully"
+    )
+
+
+@router.delete("/rooms/{room_id}", response_model=APIResponse)
+async def delete_conference_room(
+    room_id: UUID,
+    current_user: User = Depends(require_desk_manager),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete a conference room (soft delete).
+    
+    **DESK_CONFERENCE Manager only**
+    """
+    desk_service = DeskService(db)
+    success, error = await desk_service.delete_room(room_id, current_user)
+    
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+    
+    return create_response(
+        data={"deleted": True},
+        message="Conference room deleted successfully"
     )
 
 

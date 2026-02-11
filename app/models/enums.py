@@ -191,44 +191,48 @@ class ITRequestType(str, enum.Enum):
     """Types of IT requests.
     
     Note: Values must match the database enum exactly (case-sensitive).
-    The database enum 'itrequesttype' contains: REPAIR, REPLACEMENT, NEW,
-    NEW_ASSET, SOFTWARE_INSTALL, ACCESS_REQUEST, NETWORK_ISSUE, OTHER
+    The database enum 'itrequesttype' contains lowercase values.
     """
-    NEW = "NEW"  # Original DB value
-    NEW_ASSET = "NEW_ASSET"
-    REPAIR = "REPAIR"
-    REPLACEMENT = "REPLACEMENT"
-    SOFTWARE_INSTALL = "SOFTWARE_INSTALL"
-    ACCESS_REQUEST = "ACCESS_REQUEST"
-    NETWORK_ISSUE = "NETWORK_ISSUE"
-    OTHER = "OTHER"
+    NEW = "NEW"  # Original DB value from initial migration
+    NEW_ASSET = "new_asset"
+    REPAIR = "repair"
+    REPLACEMENT = "REPLACEMENT"  # Original DB value from initial migration
+    SOFTWARE_INSTALL = "software_install"
+    ACCESS_REQUEST = "access_request"
+    NETWORK_ISSUE = "network_issue"
+    OTHER = "other"
 
 
 class ITRequestStatus(str, enum.Enum):
     """Status of IT requests."""
-    PENDING = "PENDING"
-    APPROVED = "APPROVED"
-    IN_PROGRESS = "IN_PROGRESS"
-    COMPLETED = "COMPLETED"
-    REJECTED = "REJECTED"
-    CANCELLED = "CANCELLED"
+    PENDING = "pending"
+    APPROVED = "approved"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"
 
 
 class ITRequestPriority(str, enum.Enum):
     """Priority levels for IT requests."""
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH = "HIGH"
-    CRITICAL = "CRITICAL"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
 
 
 class ProjectStatus(str, enum.Enum):
-    """Status of projects."""
-    DRAFT = "draft"
-    PENDING_APPROVAL = "pending_approval"
-    APPROVED = "approved"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    ON_HOLD = "on_hold"
-    CANCELLED = "cancelled"
-    REJECTED = "rejected"
+    """Status of projects.
+    
+    Note: Original DB values are uppercase (DRAFT, PENDING, APPROVED, etc.)
+    from initial migration. Later migration added pending_approval and on_hold
+    as lowercase. Using the values that actually exist in the database.
+    """
+    DRAFT = "DRAFT"
+    PENDING_APPROVAL = "pending_approval"  # Added in later migration
+    APPROVED = "APPROVED"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    ON_HOLD = "on_hold"  # Added in later migration
+    CANCELLED = "CANCELLED"
+    REJECTED = "REJECTED"  # Original uppercase value

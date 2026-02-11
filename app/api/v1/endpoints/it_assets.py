@@ -189,8 +189,33 @@ async def get_my_assignments(
         current_user.id, active_only
     )
     
+    # Build response manually with all required fields
+    response_data = []
+    for assignment in assignments:
+        response_data.append({
+            "id": assignment.id,
+            "asset_id": assignment.asset_id,
+            "asset_code": assignment.asset.asset_code,
+            "asset_name": assignment.asset.name,
+            "asset_type": assignment.asset.asset_type,
+            "user_code": assignment.user_code,
+            "user_name": f"{assignment.user.first_name} {assignment.user.last_name}",
+            "assigned_by_code": assignment.assigned_by_code,
+            "assigned_by_name": f"{assignment.assigned_by.first_name} {assignment.assigned_by.last_name}",
+            "assigned_at": assignment.assigned_at,
+            "returned_at": assignment.returned_at,
+            "returned_to_code": assignment.returned_to_code,
+            "returned_to_name": None if not assignment.returned_to else f"{assignment.returned_to.first_name} {assignment.returned_to.last_name}",
+            "return_condition": assignment.return_condition,
+            "return_acknowledged": False,
+            "acknowledgement_date": assignment.acknowledged_at,
+            "is_active": assignment.is_active,
+            "notes": assignment.notes,
+            "created_at": assignment.created_at
+        })
+    
     return create_response(
-        data=[ITAssetAssignmentResponse.model_validate(a) for a in assignments],
+        data=response_data,
         message="Your asset assignments retrieved successfully"
     )
 

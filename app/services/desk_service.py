@@ -231,6 +231,14 @@ class DeskService:
         await self.db.commit()
         await self.db.refresh(booking)
         
+        # Re-query with eager-loaded desk relationship to avoid lazy loading in async context
+        result = await self.db.execute(
+            select(DeskBooking)
+            .options(selectinload(DeskBooking.desk))
+            .where(DeskBooking.id == booking.id)
+        )
+        booking = result.scalar_one()
+        
         return booking, None
     
     async def update_booking(
@@ -592,6 +600,14 @@ class DeskService:
         self.db.add(booking)
         await self.db.commit()
         await self.db.refresh(booking)
+        
+        # Re-query with eager-loaded room relationship to avoid lazy loading in async context
+        result = await self.db.execute(
+            select(ConferenceRoomBooking)
+            .options(selectinload(ConferenceRoomBooking.room))
+            .where(ConferenceRoomBooking.id == booking.id)
+        )
+        booking = result.scalar_one()
         
         return booking, None
     
