@@ -2005,6 +2005,639 @@ Once the server is running, access:
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 
+---
+
+## 🔄 Complete System Workflows
+
+This section details the complete end-to-end workflows for all major features in the system.
+
+### 1. User Management Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ User Onboarding & Management                                     │
+└─────────────────────────────────────────────────────────────────┘
+
+SUPER_ADMIN creates ADMIN
+    ↓
+ADMIN creates MANAGER (with manager_type)
+    ↓
+ADMIN creates TEAM_LEAD (with department)
+    ↓
+MANAGER/ADMIN creates EMPLOYEE (with team_lead_code)
+
+Each user automatically gets:
+✓ Unique user_code (auto-generated)
+✓ Email (auto-generated if not provided: firstname.lastname@company.com)
+✓ Hierarchical relationship (team_lead_code, manager_code, admin_code)
+✓ Login credentials
+```
+
+**Workflow Steps:**
+
+1. **Create User** → `POST /api/v1/users`
+   - ADMIN provides: name, role, department (for team lead), manager_type (for manager)
+   - System auto-generates: user_code, email, hierarchical codes
+
+2. **User Login** → `POST /api/v1/auth/login`
+   - User provides: email, password
+   - System returns: JWT access token + refresh token
+
+3. **Update Profile** → `PUT /api/v1/users/{user_id}`
+   - Users can update: name, phone, vehicle details
+   - ADMIN can update: role, department, hierarchy
+
+4. **Deactivate User** → `POST /api/v1/users/{user_id}/toggle-active`
+   - ADMIN deactivates user (prevents login)
+   - User data retained for reporting
+
+---
+
+### 2. Attendance Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Daily Attendance Tracking                                        │
+└─────────────────────────────────────────────────────────────────┘
+
+EMPLOYEE arrives at office
+    ↓
+Check-in (POST /attendance/check-in)
+    ↓ [System creates attendance record with status: draft]
+    ↓
+Work during the day (Multiple check-ins/check-outs allowed)
+    ↓
+Check-out (POST /attendance/check-out)
+    ↓ [System calculates duration, updates total hours]
+    ↓
+End of day: Submit for approval (POST /attendance/{id}/submit)
+    ↓ [Status: draft → pending_approval]
+    ↓
+TEAM_LEAD reviews (GET /attendance/pending-approvals)
+    ↓
+TEAM_LEAD approves (POST /attendance/{id}/approve)
+    ↓ [Status: pending_approval → approved]
+    ↓
+Attendance record finalized ✓
+```
+
+**Key Features:**
+- **Multiple Check-ins**: Employees can check-in/out multiple times per day (lunch breaks, meetings outside office)
+- **Auto Calculation**: Total hours automatically calculated
+- **Flexible Submission**: Can submit at end of day or later
+- **Hierarchical Approval**: Team Lead → Manager → Admin (based on who's attendance it is)
+- **Attendance Manager**: Can view and approve ALL company attendance
+
+**Special Cases:**
+- **Team Lead Attendance**: Requires Manager approval
+- **Manager Attendance**: Requires Admin approval
+- **Forgot to Check-out**: TEAM_LEAD can manually add check-out time
+- **Attendance Override**: Attendance Manager can override any attendance
+
+---
+
+### 3. Leave Management Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Leave Request & Approval Process                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+EMPLOYEE creates leave request
+    ↓ [POST /leave/requests]
+    ↓ System checks: leave balance, overlap, past dates
+    ↓ Status: pending_level1
+    ↓
+TEAM_LEAD reviews pending requests
+    ↓ [GET /leave/requests/pending-level1]
+    ↓
+TEAM_LEAD approves Level 1
+    ↓ [POST /leave/requests/{id}/approve-level1]
+    ↓ Status: approved_level1
+    ↓
+If multi-day leave OR team lead's leave:
+    ↓
+    MANAGER reviews
+    ↓ [GET /leave/requests/pending-final]
+    ↓
+    MANAGER final approval
+    ↓ [POST /leave/requests/{id}/approve-final]
+    ↓ Status: approved_final
+    ↓ Leave balance deducted
+    ↓
+Leave approved and recorded ✓
+```
+
+**Leave Types & Balances:**
+- **Casual Leave**: 10 days/year
+- **Sick Leave**: 12 days/year
+- **Privilege Leave**: 15 days/year
+- **Unpaid Leave**: Unlimited (no balance deduction)
+
+**Business Rules:**
+- Cannot request leave for past dates
+- Cannot overlap with existing approved leave
+- Half-day leave counts as 0.5 days
+- Two-level approval for multi-day leave
+- Single-level approval for single-day casual leave (Team Lead only)
+
+**Rejection Flow:**
+```
+At any approval level:
+    Approver rejects → Status: rejected
+    Employee can create new request (original cannot be modified)
+```
+
+**Cancellation Flow:**
+```
+EMPLOYEE cancels own leave (if pending)
+    ↓ [POST /leave/requests/{id}/cancel]
+    ↓ Status: cancelled
+    ↓ Balance restored (if already deducted)
+```
+
+---
+
+### 4. Parking Management Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Parking Slot Allocation                                          │
+└─────────────────────────────────────────────────────────────────┘
+
+Setup (One-time by Parking Manager):
+    Parking Manager creates slots
+    ↓ [POST /parking/slots/create?slot_code=A-01]
+    ↓ Slots status: AVAILABLE
+
+Daily Usage (All Employees):
+    EMPLOYEE arrives with vehicle
+    ↓ [POST /parking/allocate] - No input needed!
+    ↓ System finds first available slot
+    ↓ Assigns to employee using profile vehicle info
+    ↓ Slot status: OCCUPIED
+    ↓ Creates parking log with entry time
+    ↓
+    EMPLOYEE leaves office
+    ↓ [POST /parking/release] - No input needed!
+    ↓ System finds employee's active parking
+    ↓ Records exit time, calculates duration
+    ↓ Slot status: AVAILABLE
+    ↓ Parking log completed ✓
+
+Visitor Parking (Parking Manager):
+    Guest arrives
+    ↓ [POST /parking/slots/assign-visitor]
+    ↓ Parking Manager assigns slot to visitor
+    ↓ Records visitor name, vehicle number
+    ↓
+    Guest leaves
+    ↓ [POST /parking/slots/change-status/{slot_code}?new_status=AVAILABLE]
+    ↓ Slot freed for next user
+```
+
+**Management Operations:**
+- **View Summary**: `GET /parking/slots/summary` - Total, available, occupied counts
+- **List All Slots**: `GET /parking/slots/list` - All slots with occupant details
+- **View Logs**: `GET /parking/logs/list` - Complete parking history
+- **Disable Slot**: `POST /parking/slots/change-status` - Mark for maintenance
+
+**Error Handling:**
+- No vehicle in profile → Cannot allocate parking
+- Already has active parking → Must release first
+- No available slots → Shows error, try later
+
+---
+
+### 5. Desk & Conference Room Booking Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Desk Booking (Date-Range Based)                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+Setup:
+    Desk Manager creates desks/rooms
+    ↓ [POST /desks or POST /desks/rooms]
+    ↓ Desk/Room available for booking
+
+Employee Booking:
+    EMPLOYEE needs workspace for project
+    ↓ Views available desks [GET /desks]
+    ↓ Creates booking [POST /desks/bookings]
+    ↓ Provides: desk_id, start_date, end_date, purpose
+    ↓ System validates: no overlap, desk available
+    ↓ Booking confirmed immediately (status: CONFIRMED)
+    ↓ Can work at desk during booked dates ✓
+
+Cancellation:
+    EMPLOYEE cancels booking
+    ↓ [DELETE /desks/bookings/{booking_id}]
+    ↓ Only future bookings can be cancelled
+    ↓ Desk becomes available immediately
+```
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Conference Room Booking (Approval Required)                     │
+└─────────────────────────────────────────────────────────────────┘
+
+EMPLOYEE needs meeting room
+    ↓ Views available rooms [GET /desks/rooms]
+    ↓ Creates booking [POST /desks/rooms/bookings]
+    ↓ Provides: room_id, start_date, end_date, purpose
+    ↓ Status: PENDING (awaiting approval)
+    ↓
+Desk Manager reviews pending requests
+    ↓ [GET /desks/rooms/bookings/pending]
+    ↓
+Desk Manager approves or rejects
+    ↓ [POST /desks/rooms/bookings/{id}/approve]
+    ↓ [POST /desks/rooms/bookings/{id}/reject]
+    ↓
+If approved: Status → CONFIRMED
+    Employee can use room ✓
+If rejected: Status → REJECTED
+    Employee notified with reason
+```
+
+**Business Rules:**
+- Desk bookings: Immediately confirmed (no approval needed)
+- Conference room bookings: Require Desk Manager approval
+- Cannot book past dates
+- Cannot overlap with existing confirmed bookings
+- Can view own bookings: `GET /desks/bookings/my`
+
+---
+
+### 6. Cafeteria & Food Ordering Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Food Ordering System (Cart-Based)                               │
+└─────────────────────────────────────────────────────────────────┘
+
+Setup:
+    Cafeteria Manager creates menu items
+    ↓ [POST /food-orders/items]
+    ↓ Items available for ordering
+
+Employee Orders Food:
+    EMPLOYEE browses menu
+    ↓ [GET /food-orders/items] - Can filter by category, search
+    ↓ Selects multiple items (builds cart in frontend)
+    ↓
+    Places order with multiple items
+    ↓ [POST /food-orders/orders]
+    ↓ Request body:
+    {
+      "order_items": [
+        {"item_id": "...", "quantity": 2, "special_instructions": "Less spicy"},
+        {"item_id": "...", "quantity": 1}
+      ],
+      "delivery_time": "13:00:00",
+      "notes": "Cabin 305"
+    }
+    ↓ System calculates total amount
+    ↓ Order created with status: PENDING
+    ↓ Order number auto-generated: ORD-20260211-001
+    ↓
+Cafeteria staff processes:
+    ↓ [PUT /food-orders/orders/{id}/status]
+    ↓ Status progression:
+    PENDING → CONFIRMED → PREPARING → READY → DELIVERED
+    ↓
+Order completed ✓
+```
+
+**Order Management:**
+- **View Menu**: All users see all food items
+- **Own Orders Only**: Users see only their orders (RBAC enforced)
+- **Cancel Order**: Only if status is PENDING
+- **Manager View**: Cafeteria Manager sees ALL orders
+
+**Table Booking (Optional):**
+```
+EMPLOYEE wants to reserve table
+    ↓ [GET /cafeteria/tables] - View available tables
+    ↓ [POST /cafeteria/bookings]
+    ↓ Provides: table_id, booking_date, start_time, end_time
+    ↓ Table reserved ✓
+```
+
+---
+
+### 7. IT Asset Management Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ IT Asset Lifecycle                                               │
+└─────────────────────────────────────────────────────────────────┘
+
+Asset Procurement:
+    IT Manager adds new asset to inventory
+    ↓ [POST /it-assets]
+    ↓ Provides: name, type, serial number, purchase details
+    ↓ System auto-generates asset_code (e.g., LAP-001)
+    ↓ Status: AVAILABLE
+    ↓
+Asset Assignment:
+    Employee needs laptop
+    ↓ IT Manager assigns asset
+    ↓ [POST /it-assets/{asset_id}/assign]
+    ↓ Provides: user_id, assignment notes
+    ↓ Status: ASSIGNED
+    ↓ Assignment history created
+    ↓ Employee receives asset ✓
+    ↓
+Employee views assigned assets:
+    ↓ [GET /it-assets/my]
+    ↓ Sees all currently assigned equipment
+    ↓
+Asset Return:
+    Employee returns asset (leaving company, upgrade, etc.)
+    ↓ IT Manager unassigns
+    ↓ [POST /it-assets/{asset_id}/unassign]
+    ↓ Status: AVAILABLE
+    ↓ Asset ready for reassignment
+    ↓
+Asset Maintenance:
+    Asset needs repair
+    ↓ IT Manager updates status
+    ↓ [PUT /it-assets/{asset_id}]
+    ↓ Status: UNDER_MAINTENANCE
+    ↓ After repair: Status → AVAILABLE
+    ↓
+Asset Retirement:
+    Asset too old/damaged
+    ↓ IT Manager retires asset
+    ↓ Status: RETIRED
+    ↓ Kept in system for historical records
+```
+
+**Asset Types:**
+- Laptop, Monitor, Keyboard, Mouse, Headphones, Docking Station, etc.
+
+**Tracking Features:**
+- **Assignment History**: `GET /it-assets/{asset_id}/history`
+- **Warranty Tracking**: warranty_until field
+- **Specifications**: JSON field for detailed specs
+- **Search**: Semantic search by description
+
+---
+
+### 8. IT Request Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ IT Support Request Lifecycle                                     │
+└─────────────────────────────────────────────────────────────────┘
+
+EMPLOYEE has IT issue/need
+    ↓ Creates IT request
+    ↓ [POST /it-requests]
+    ↓ Provides: request_type, title, description, priority
+    ↓ Request types: NEW, NEW_ASSET, REPAIR, REPLACEMENT,
+    │                 SOFTWARE_INSTALL, ACCESS_REQUEST,
+    │                 NETWORK_ISSUE, OTHER
+    ↓ System auto-generates request_number: REQ-20260211-001
+    ↓ Status: PENDING
+    ↓
+IT Manager reviews requests
+    ↓ [GET /it-requests] - Sees all pending requests
+    ↓ Views request details
+    ↓
+IT Manager approves or rejects
+    ↓ [POST /it-requests/{id}/approve]
+    ↓ Request body:
+    {
+      "action": "approve",  // or "reject"
+      "notes": "Will provide laptop by Friday",
+      "assigned_to_code": "IT5001",  // Optional: assign to IT staff
+      "rejection_reason": "Not justified"  // If rejecting
+    }
+    ↓
+If approved:
+    ↓ Status: APPROVED
+    ↓ IT staff (assigned_to) fulfills request
+    ↓ For NEW_ASSET: Creates asset and assigns to requester
+    ↓ For REPAIR: Updates asset status to UNDER_MAINTENANCE
+    ↓ Request marked complete
+    ↓
+If rejected:
+    ↓ Status: REJECTED
+    ↓ Employee notified with rejection reason
+    ↓ Can create new request with more details
+```
+
+**IT Request Types:**
+1. **NEW**: General IT request
+2. **NEW_ASSET**: Need new equipment (laptop, monitor, etc.)
+3. **REPAIR**: Fix existing asset
+4. **REPLACEMENT**: Replace broken/old asset
+5. **SOFTWARE_INSTALL**: Install software on machine
+6. **ACCESS_REQUEST**: Network/system access
+7. **NETWORK_ISSUE**: Network connectivity problems
+8. **OTHER**: Other IT support needs
+
+**Simplified Workflow (Approval Only):**
+- No separate "start" or "complete" endpoints
+- IT Manager approves → Request fulfilled
+- Status: PENDING → APPROVED/REJECTED (final states)
+
+---
+
+### 9. Project Management Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Project Request & Approval                                       │
+└─────────────────────────────────────────────────────────────────┘
+
+TEAM_LEAD has project idea
+    ↓ Creates project request
+    ↓ [POST /projects]
+    ↓ Provides: project_name, description, dates,
+    │           budget, team_size, required_skills,
+    │           business_justification
+    ↓ System auto-generates project_code: PRJ-2026-001
+    ↓ Status: PENDING_APPROVAL
+    ↓
+ADMIN reviews pending projects
+    ↓ [GET /projects/pending]
+    ↓ Evaluates business case, budget, ROI
+    ↓
+ADMIN approves or rejects
+    ↓ [POST /projects/{id}/approve]
+    ↓ Request body:
+    {
+      "action": "approve",  // or "reject"
+      "notes": "Approved with conditions",
+      "approved_budget": 4500000.00,  // Can modify budget
+      "rejection_reason": "Insufficient ROI"
+    }
+    ↓
+If approved:
+    ↓ Status: APPROVED
+    ↓ TEAM_LEAD starts project
+    ↓ [PUT /projects/{id}/status] → IN_PROGRESS
+    ↓ Team works on project
+    ↓ Progress updates via status changes
+    ↓ Final status: COMPLETED
+    ↓
+If rejected:
+    ↓ Status: REJECTED
+    ↓ Team Lead notified with reason
+    ↓ Can submit revised proposal
+```
+
+**Project Status Lifecycle:**
+```
+PENDING_APPROVAL → APPROVED → IN_PROGRESS → COMPLETED
+                 ↓           ↓
+              REJECTED    ON_HOLD → IN_PROGRESS
+                          CANCELLED
+```
+
+**Business Rules:**
+- Only TEAM_LEAD can create projects
+- Only ADMIN can approve projects
+- Budget can be modified during approval
+- Projects can be put on hold and resumed
+- Status updates restricted to project owner or ADMIN
+
+---
+
+### 10. Holiday Management Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Company Holiday Calendar                                         │
+└─────────────────────────────────────────────────────────────────┘
+
+ADMIN manages holidays:
+    ↓ Creates holiday [POST /holidays]
+    ↓ Provides: holiday_name, holiday_date,
+    │           is_mandatory, description
+    ↓ Holiday added to calendar
+    ↓
+All employees view holidays:
+    ↓ [GET /holidays]
+    ↓ Can filter by year
+    ↓ See mandatory vs optional holidays
+    ↓
+Leave system integration:
+    ↓ Leave requests automatically skip holidays
+    ↓ Holiday dates don't count toward leave days
+    ↓
+ADMIN can update/delete:
+    ↓ [PUT /holidays/{id}] - Modify holiday
+    ↓ [DELETE /holidays/{id}] - Remove holiday
+```
+
+---
+
+### 11. Semantic Search Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ AI-Powered Search                                                │
+└─────────────────────────────────────────────────────────────────┘
+
+Setup (Automatic):
+    System generates embeddings for:
+    ✓ Food items (name + description + category)
+    ✓ IT assets (name + description + specifications)
+    ↓ Uses: sentence-transformers/all-MiniLM-L6-v2
+    ↓ Stores: 384-dimensional vectors in pgvector
+    ↓
+User performs search:
+    ↓ [POST /search]
+    ↓ Request body:
+    {
+      "query": "spicy vegetarian lunch",
+      "search_type": "food",
+      "limit": 10
+    }
+    ↓ System converts query to embedding
+    ↓ Performs cosine similarity search
+    ↓ Returns ranked results with similarity scores
+    ↓
+Results:
+    [
+      {"item": {...}, "similarity_score": 0.87},
+      {"item": {...}, "similarity_score": 0.82},
+      ...
+    ]
+```
+
+**Search Examples:**
+- **Food**: "healthy breakfast", "non-veg spicy", "quick snacks", "beverages"
+- **IT Assets**: "high performance laptop", "4K monitor", "wireless peripherals"
+
+**Advantages:**
+- Understands semantic meaning (not just keywords)
+- Finds similar items even with different wording
+- Ranks results by relevance
+
+---
+
+## 🧪 Testing Guide
+
+### Running Tests
+
+```bash
+# Install test dependencies
+pip install pytest pytest-asyncio pytest-cov httpx
+
+# Start PostgreSQL database (required for tests)
+docker compose up -d db
+
+# Run all tests
+pytest test_all.py -v
+
+# Run with coverage report
+pytest test_all.py --cov=app --cov-report=html
+
+# Run specific test
+pytest test_all.py::test_complete_attendance_workflow -v
+```
+
+### Test Database Setup
+
+Tests require a PostgreSQL database. Set the connection string:
+
+```bash
+export TEST_DATABASE_URL="postgresql+asyncpg://office_admin:office_password@localhost:5432/office_management_test"
+```
+
+Or use the default database (ensure it's running):
+
+```bash
+docker compose up -d db
+```
+
+### Test Coverage
+
+The `test_all.py` file provides comprehensive testing for:
+- ✅ All authentication flows
+- ✅ User management and hierarchy
+- ✅ Attendance workflows (check-in/out, approval)
+- ✅ Leave management (creation, approval, cancellation)
+- ✅ Parking operations (allocate, release)
+- ✅ Desk and conference room booking
+- ✅ Food ordering (multi-item cart)
+- ✅ IT asset lifecycle
+- ✅ IT request approval workflow
+- ✅ Project management
+- ✅ Holiday management
+- ✅ RBAC enforcement
+- ✅ Error handling and edge cases
+
+**For detailed testing instructions, see [TEST_README.md](TEST_README.md)**
+
+---
+
 ## License
 
 MIT License

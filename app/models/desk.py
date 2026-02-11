@@ -68,7 +68,7 @@ class DeskBooking(Base, TimestampMixin):
     """
     Desk booking records.
     Uses user_code instead of user_id.
-    Supports time-based booking within business hours (9 AM - 7 PM).
+    Supports date-range booking (start_date to end_date).
     """
     __tablename__ = "desk_bookings"
     
@@ -80,10 +80,9 @@ class DeskBooking(Base, TimestampMixin):
     # User reference - using user_code
     user_code = Column(String(10), ForeignKey("users.user_code"), nullable=False)
     
-    # Booking details
-    booking_date = Column(Date, nullable=False)
-    start_time = Column(Time, nullable=False)  # Business hours: 9:00 - 19:00
-    end_time = Column(Time, nullable=False)
+    # Booking details - date range
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
     
     # Status
     status = Column(Enum(BookingStatus), default=BookingStatus.CONFIRMED)
@@ -101,8 +100,8 @@ class DeskBooking(Base, TimestampMixin):
     user = relationship("User", foreign_keys=[user_code], primaryjoin="DeskBooking.user_code == User.user_code")
     
     __table_args__ = (
-        Index("ix_desk_booking_date", "desk_id", "booking_date"),
-        Index("ix_desk_booking_user", "user_code", "booking_date"),
+        Index("ix_desk_booking_date", "desk_id", "start_date", "end_date"),
+        Index("ix_desk_booking_user", "user_code", "start_date"),
         Index("ix_desk_booking_status", "status"),
     )
 

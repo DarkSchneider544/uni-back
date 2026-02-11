@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, String, Boolean, Enum, Index, event, ForeignKey
+    Column, String, Boolean, Enum, Index, UniqueConstraint, event, ForeignKey
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -126,8 +126,9 @@ class User(Base, TimestampMixin):
         backref="managed_managers"
     )
     
-    # Indexes
+    # Indexes and constraints
     __table_args__ = (
+        UniqueConstraint("user_code", name="uq_users_user_code"),  # Explicit unique constraint for foreign keys
         Index("ix_users_role", "role"),
         Index("ix_users_manager_type", "manager_type"),
         Index("ix_users_active_deleted", "is_active", "is_deleted"),

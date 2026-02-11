@@ -19,7 +19,8 @@ from ....schemas.desk import (
     DeskBookingCreate, DeskBookingUpdate, DeskBookingResponse, DeskBookingListResponse,
     ConferenceRoomCreate, ConferenceRoomUpdate, ConferenceRoomResponse, ConferenceRoomListResponse,
     ConferenceRoomBookingCreate, ConferenceRoomBookingUpdate, ConferenceRoomBookingResponse,
-    ConferenceRoomBookingListResponse, DeskStatistics
+    ConferenceRoomBookingListResponse, DeskStatistics,
+    ConferenceRoomBookingApproval, ConferenceRoomBookingRejection
 )
 from ....schemas.base import APIResponse, PaginatedResponse
 from ....services.desk_service import DeskService
@@ -130,9 +131,8 @@ async def create_desk_booking(
         "desk_code": booking.desk.desk_code,
         "desk_label": booking.desk.desk_label,
         "user_code": booking.user_code,
-        "booking_date": booking.booking_date,
-        "start_time": booking.start_time,
-        "end_time": booking.end_time,
+        "start_date": booking.start_date,
+        "end_date": booking.end_date,
         "status": booking.status,
         "checked_in_at": booking.checked_in_at,
         "checked_out_at": booking.checked_out_at,
@@ -176,9 +176,8 @@ async def list_desk_bookings(
             "desk_code": booking.desk.desk_code,
             "desk_label": booking.desk.desk_label,
             "user_code": booking.user_code,
-            "booking_date": booking.booking_date,
-            "start_time": booking.start_time,
-            "end_time": booking.end_time,
+            "start_date": booking.start_date,
+            "end_date": booking.end_date,
             "status": booking.status,
             "checked_in_at": booking.checked_in_at,
             "checked_out_at": booking.checked_out_at,
@@ -218,9 +217,8 @@ async def get_my_desk_bookings(
             "desk_code": booking.desk.desk_code,
             "desk_label": booking.desk.desk_label,
             "user_code": booking.user_code,
-            "booking_date": booking.booking_date,
-            "start_time": booking.start_time,
-            "end_time": booking.end_time,
+            "start_date": booking.start_date,
+            "end_date": booking.end_date,
             "status": booking.status,
             "checked_in_at": booking.checked_in_at,
             "checked_out_at": booking.checked_out_at,
@@ -508,6 +506,152 @@ async def cancel_room_booking(
     return create_response(
         data={"cancelled": True},
         message="Conference room booking cancelled successfully"
+    )
+
+
+# ==================== Conference Room Booking Approval APIs (Manager Only) ====================
+
+@router.get("/rooms/bookings/pending", response_model=PaginatedResponse[ConferenceRoomBookingResponse])
+async def list_pending_room_bookings(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(require_desk_manager),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    List all pending conference room bookings awaiting approval.
+    
+    **DESK_CONFERENCE Manager only**
+    """
+    desk_service = DeskService(db)
+    bookings, total = await desk_service.list_pending_room_bookings(
+        page=page,
+        page_size=page_size
+    )
+    
+    # Build response with room details
+    response_data = []
+    for booking in bookings:
+        response_data.append({
+            "id": booking.id,
+            "room_id": booking.room_id,
+            "room_code": booking.room.room_code,
+            "room_label": booking.room.room_label,
+            "capacity": booking.room.capacity,
+            "user_code": booking.user_code,
+            "booking_date": booking.booking_date,
+            "start_time": booking.start_time,
+            "end_time": booking.end_time,
+            "title": booking.title,
+            "description": booking.description,
+            "attendees_count": booking.attendees_count,
+            "status": booking.status,
+            "notes": booking.notes,
+            "created_at": booking.created_at,
+            "updated_at": booking.updated_at
+        })
+    
+    return create_paginated_response(
+        data=response_data,
+        total=total,
+        page=page,
+        page_size=page_size,
+        message="Pending conference room bookings retrieved successfully"
+    )
+
+
+@router.post("/rooms/bookings/{booking_id}/approve", response_model=APIResponse[ConferenceRoomBookingResponse])
+async def approve_room_booking(
+    booking_id: UUID,
+    approval_data: ConferenceRoomBookingApproval = None,
+    current_user: User = Depends(require_desk_manager),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Approve a pending conference room booking.
+    
+    **DESK_CONFERENCE Manager only**
+    """
+    desk_service = DeskService(db)
+    notes = approval_data.notes if approval_data else None
+    booking, error = await desk_service.approve_room_booking(booking_id, current_user, notes)
+    
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+    
+    # Build response with room details
+    response_data = {
+        "id": booking.id,
+        "room_id": booking.room_id,
+        "room_code": booking.room.room_code,
+        "room_label": booking.room.room_label,
+        "capacity": booking.room.capacity,
+        "user_code": booking.user_code,
+        "booking_date": booking.booking_date,
+        "start_time": booking.start_time,
+        "end_time": booking.end_time,
+        "title": booking.title,
+        "description": booking.description,
+        "attendees_count": booking.attendees_count,
+        "status": booking.status,
+        "notes": booking.notes,
+        "created_at": booking.created_at,
+        "updated_at": booking.updated_at
+    }
+    
+    return create_response(
+        data=response_data,
+        message="Conference room booking approved successfully"
+    )
+
+
+@router.post("/rooms/bookings/{booking_id}/reject", response_model=APIResponse[ConferenceRoomBookingResponse])
+async def reject_room_booking(
+    booking_id: UUID,
+    rejection_data: ConferenceRoomBookingRejection,
+    current_user: User = Depends(require_desk_manager),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Reject a pending conference room booking.
+    
+    **DESK_CONFERENCE Manager only**
+    """
+    desk_service = DeskService(db)
+    booking, error = await desk_service.reject_room_booking(booking_id, current_user, rejection_data.reason)
+    
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+    
+    # Build response with room details
+    response_data = {
+        "id": booking.id,
+        "room_id": booking.room_id,
+        "room_code": booking.room.room_code,
+        "room_label": booking.room.room_label,
+        "capacity": booking.room.capacity,
+        "user_code": booking.user_code,
+        "booking_date": booking.booking_date,
+        "start_time": booking.start_time,
+        "end_time": booking.end_time,
+        "title": booking.title,
+        "description": booking.description,
+        "attendees_count": booking.attendees_count,
+        "status": booking.status,
+        "notes": booking.notes,
+        "created_at": booking.created_at,
+        "updated_at": booking.updated_at
+    }
+    
+    return create_response(
+        data=response_data,
+        message="Conference room booking rejected"
     )
 
 

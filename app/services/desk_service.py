@@ -147,7 +147,7 @@ class DeskService:
                 and_(
                     DeskBooking.desk_id == desk_id,
                     DeskBooking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
-                    DeskBooking.booking_date >= date.today()
+                    DeskBooking.end_date >= date.today()
                 )
             )
         )
@@ -173,31 +173,18 @@ class DeskService:
     async def check_booking_overlap(
         self,
         desk_id: UUID,
-        booking_date: date,
-        start_time: time,
-        end_time: time,
+        start_date: date,
+        end_date: date,
         exclude_booking_id: Optional[UUID] = None
     ) -> bool:
-        """Check if there's an overlapping booking."""
+        """Check if there's an overlapping booking for the date range."""
+        # Date ranges overlap if: start1 <= end2 AND end1 >= start2
         query = select(DeskBooking).where(
             and_(
                 DeskBooking.desk_id == desk_id,
-                DeskBooking.booking_date == booking_date,
                 DeskBooking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
-                or_(
-                    and_(
-                        DeskBooking.start_time <= start_time,
-                        DeskBooking.end_time > start_time
-                    ),
-                    and_(
-                        DeskBooking.start_time < end_time,
-                        DeskBooking.end_time >= end_time
-                    ),
-                    and_(
-                        DeskBooking.start_time >= start_time,
-                        DeskBooking.end_time <= end_time
-                    )
-                )
+                DeskBooking.start_date <= end_date,
+                DeskBooking.end_date >= start_date
             )
         )
         
@@ -225,19 +212,17 @@ class DeskService:
         # Check for overlapping bookings
         has_overlap = await self.check_booking_overlap(
             booking_data.desk_id,
-            booking_data.booking_date,
-            booking_data.start_time,
-            booking_data.end_time
+            booking_data.start_date,
+            booking_data.end_date
         )
         if has_overlap:
-            return None, "Time slot overlaps with existing booking"
+            return None, "Date range overlaps with existing booking"
         
         booking = DeskBooking(
             desk_id=booking_data.desk_id,
             user_code=user.user_code,
-            booking_date=booking_data.booking_date,
-            start_time=booking_data.start_time,
-            end_time=booking_data.end_time,
+            start_date=booking_data.start_date,
+            end_date=booking_data.end_date,
             status=BookingStatus.CONFIRMED,
             notes=booking_data.notes
         )
@@ -264,20 +249,19 @@ class DeskService:
             if not self.can_manage_desks(user):
                 return None, "Cannot modify another user's booking"
         
-        # If updating time, check for overlaps
-        if booking_data.start_time or booking_data.end_time:
-            start = booking_data.start_time or booking.start_time
-            end = booking_data.end_time or booking.end_time
+        # If updating dates, check for overlaps
+        if booking_data.start_date or booking_data.end_date:
+            start = booking_data.start_date or booking.start_date
+            end = booking_data.end_date or booking.end_date
             
             has_overlap = await self.check_booking_overlap(
                 booking.desk_id,
-                booking.booking_date,
                 start,
                 end,
                 exclude_booking_id=booking_id
             )
             if has_overlap:
-                return None, "Time slot overlaps with existing booking"
+                return None, "Date range overlaps with existing booking"
         
         update_data = booking_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -333,7 +317,9 @@ class DeskService:
         if user_code:
             conditions.append(DeskBooking.user_code == user_code)
         if booking_date:
-            conditions.append(DeskBooking.booking_date == booking_date)
+            # Filter bookings that include this date
+            conditions.append(DeskBooking.start_date <= booking_date)
+            conditions.append(DeskBooking.end_date >= booking_date)
         if status:
             conditions.append(DeskBooking.status == status)
         
@@ -346,7 +332,7 @@ class DeskService:
         total = total_result.scalar()
         
         # Get paginated results
-        query = query.order_by(DeskBooking.booking_date.desc(), DeskBooking.start_time)
+        query = query.order_by(DeskBooking.start_date.desc())
         query = query.offset((page - 1) * page_size).limit(page_size)
         result = await self.db.execute(query)
         bookings = list(result.scalars().all())
@@ -355,11 +341,10 @@ class DeskService:
     
     async def get_available_desks(
         self,
-        booking_date: date,
-        start_time: time,
-        end_time: time
+        start_date: date,
+        end_date: date
     ) -> List[Desk]:
-        """Get all available desks for a time slot."""
+        """Get all available desks for a date range."""
         # Get all active desks
         query = select(Desk).where(
             and_(
@@ -371,26 +356,13 @@ class DeskService:
         result = await self.db.execute(query)
         all_desks = list(result.scalars().all())
         
-        # Get booked desks for the time slot
+        # Get booked desks for the date range
         booked_result = await self.db.execute(
             select(DeskBooking.desk_id).where(
                 and_(
-                    DeskBooking.booking_date == booking_date,
                     DeskBooking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
-                    or_(
-                        and_(
-                            DeskBooking.start_time <= start_time,
-                            DeskBooking.end_time > start_time
-                        ),
-                        and_(
-                            DeskBooking.start_time < end_time,
-                            DeskBooking.end_time >= end_time
-                        ),
-                        and_(
-                            DeskBooking.start_time >= start_time,
-                            DeskBooking.end_time <= end_time
-                        )
-                    )
+                    DeskBooking.start_date <= end_date,
+                    DeskBooking.end_date >= start_date
                 )
             )
         )
@@ -613,7 +585,7 @@ class DeskService:
             title=booking_data.title,
             description=booking_data.description,
             attendees_count=booking_data.attendees_count,
-            status=BookingStatus.CONFIRMED,
+            status=BookingStatus.PENDING,  # Requires manager approval
             notes=booking_data.notes
         )
         
@@ -687,3 +659,78 @@ class DeskService:
         bookings = list(result.scalars().all())
         
         return bookings, total
+    
+    async def approve_room_booking(
+        self,
+        booking_id: UUID,
+        user: User,
+        notes: Optional[str] = None
+    ) -> Tuple[Optional[ConferenceRoomBooking], Optional[str]]:
+        """Approve a pending conference room booking. Manager only."""
+        if not self.can_manage_desks(user):
+            return None, "Only DESK_CONFERENCE Manager can approve bookings"
+        
+        booking = await self.get_room_booking_by_id(booking_id)
+        if not booking:
+            return None, "Booking not found"
+        
+        if booking.status != BookingStatus.PENDING:
+            return None, f"Cannot approve booking with status '{booking.status.value}'. Only PENDING bookings can be approved."
+        
+        # Check for overlapping confirmed bookings (in case another was approved first)
+        has_overlap = await self.check_room_booking_overlap(
+            booking.room_id,
+            booking.booking_date,
+            booking.start_time,
+            booking.end_time,
+            exclude_booking_id=booking_id
+        )
+        if has_overlap:
+            return None, "Cannot approve: Time slot now conflicts with another confirmed booking"
+        
+        booking.status = BookingStatus.CONFIRMED
+        if notes:
+            booking.notes = (booking.notes or "") + f"\nApproval note: {notes}"
+        
+        await self.db.commit()
+        await self.db.refresh(booking)
+        
+        return booking, None
+    
+    async def reject_room_booking(
+        self,
+        booking_id: UUID,
+        user: User,
+        reason: str
+    ) -> Tuple[Optional[ConferenceRoomBooking], Optional[str]]:
+        """Reject a pending conference room booking. Manager only."""
+        if not self.can_manage_desks(user):
+            return None, "Only DESK_CONFERENCE Manager can reject bookings"
+        
+        booking = await self.get_room_booking_by_id(booking_id)
+        if not booking:
+            return None, "Booking not found"
+        
+        if booking.status != BookingStatus.PENDING:
+            return None, f"Cannot reject booking with status '{booking.status.value}'. Only PENDING bookings can be rejected."
+        
+        booking.status = BookingStatus.REJECTED
+        booking.cancellation_reason = reason
+        booking.cancelled_at = datetime.now(timezone.utc)
+        
+        await self.db.commit()
+        await self.db.refresh(booking)
+        
+        return booking, None
+    
+    async def list_pending_room_bookings(
+        self,
+        page: int = 1,
+        page_size: int = 20
+    ) -> Tuple[List[ConferenceRoomBooking], int]:
+        """List all pending conference room bookings for manager review."""
+        return await self.list_room_bookings(
+            status=BookingStatus.PENDING,
+            page=page,
+            page_size=page_size
+        )

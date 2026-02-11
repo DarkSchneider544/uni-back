@@ -42,7 +42,7 @@ async def approve_it_request(
     
     if approval_data.action == "approve":
         it_request, error = await request_service.approve_request(
-            request_id, current_user, approval_data.notes, approval_data.assigned_to_id
+            request_id, current_user, approval_data.notes, approval_data.assigned_to_code
         )
     else:
         if not approval_data.rejection_reason:
@@ -63,61 +63,6 @@ async def approve_it_request(
     return create_response(
         data=ITRequestResponse.model_validate(it_request),
         message=f"IT request {approval_data.action}d successfully"
-    )
-
-
-@router.post("/{request_id}/start", response_model=APIResponse[ITRequestResponse])
-async def start_it_request(
-    request_id: UUID,
-    current_user: User = Depends(require_it_support_manager),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Start working on an IT request.
-    
-    **IT Support Manager only**
-    """
-    request_service = ITRequestService(db)
-    it_request, error = await request_service.start_work(request_id, current_user)
-    
-    if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
-    
-    return create_response(
-        data=ITRequestResponse.model_validate(it_request),
-        message="Work started on IT request"
-    )
-
-
-@router.post("/{request_id}/complete", response_model=APIResponse[ITRequestResponse])
-async def complete_it_request(
-    request_id: UUID,
-    notes: Optional[str] = None,
-    current_user: User = Depends(require_it_support_manager),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Complete an IT request.
-    
-    **IT Support Manager only**
-    """
-    request_service = ITRequestService(db)
-    it_request, error = await request_service.complete_request(
-        request_id, current_user, notes
-    )
-    
-    if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
-    
-    return create_response(
-        data=ITRequestResponse.model_validate(it_request),
-        message="IT request completed successfully"
     )
 
 

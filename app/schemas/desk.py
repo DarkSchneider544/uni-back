@@ -67,17 +67,16 @@ class DeskBookingBase(BaseModel):
     Base desk booking schema.
     Available to: EMPLOYEE, TEAM_LEAD, MANAGER roles
     """
-    booking_date: date
-    start_time: time
-    end_time: time
+    start_date: date
+    end_date: date
     notes: Optional[str] = Field(None, max_length=500)
     
-    @field_validator('end_time')
+    @field_validator('end_date')
     @classmethod
-    def validate_time_range(cls, v, info):
-        start = info.data.get('start_time')
-        if start and v <= start:
-            raise ValueError('End time must be after start time')
+    def validate_date_range(cls, v, info):
+        start = info.data.get('start_date')
+        if start and v < start:
+            raise ValueError('End date must be on or after start date')
         return v
 
 
@@ -88,9 +87,9 @@ class DeskBookingCreate(DeskBookingBase):
     """
     desk_id: UUID
     
-    @field_validator('booking_date')
+    @field_validator('start_date')
     @classmethod
-    def validate_booking_date(cls, v):
+    def validate_start_date(cls, v):
         if v < date.today():
             raise ValueError('Cannot book for past dates')
         return v
@@ -98,16 +97,16 @@ class DeskBookingCreate(DeskBookingBase):
 
 class DeskBookingUpdate(BaseModel):
     """Desk booking update schema."""
-    start_time: Optional[time] = None
-    end_time: Optional[time] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
     notes: Optional[str] = None
     
-    @field_validator('end_time')
+    @field_validator('end_date')
     @classmethod
-    def validate_time_range(cls, v, info):
-        start = info.data.get('start_time')
-        if start and v and v <= start:
-            raise ValueError('End time must be after start time')
+    def validate_date_range(cls, v, info):
+        start = info.data.get('start_date')
+        if start and v and v < start:
+            raise ValueError('End date must be on or after start date')
         return v
 
 
@@ -125,9 +124,8 @@ class DeskBookingResponse(BaseModel):
     desk_label: str
     user_code: str
     user_name: Optional[str] = None
-    booking_date: date
-    start_time: time
-    end_time: time
+    start_date: date
+    end_date: date
     status: BookingStatus
     checked_in_at: Optional[datetime] = None
     checked_out_at: Optional[datetime] = None
@@ -252,6 +250,16 @@ class ConferenceRoomBookingUpdate(BaseModel):
     description: Optional[str] = Field(None, max_length=1000)
     attendees_count: Optional[int] = Field(None, ge=1)
     notes: Optional[str] = None
+
+
+class ConferenceRoomBookingApproval(BaseModel):
+    """Conference room booking approval schema. Manager only."""
+    notes: Optional[str] = Field(None, max_length=500, description="Optional approval notes")
+
+
+class ConferenceRoomBookingRejection(BaseModel):
+    """Conference room booking rejection schema. Manager only."""
+    reason: str = Field(..., min_length=1, max_length=500, description="Reason for rejection")
 
 
 class ConferenceRoomBookingResponse(BaseModel):

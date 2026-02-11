@@ -80,6 +80,7 @@ class BookingStatus(str, enum.Enum):
     """Status for various bookings (desk, cafeteria table, conference room)."""
     PENDING = "pending"
     CONFIRMED = "confirmed"
+    REJECTED = "rejected"
     CANCELLED = "cancelled"
     COMPLETED = "completed"
     NO_SHOW = "no_show"
