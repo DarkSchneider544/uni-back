@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, text, or_, and_
+from sqlalchemy import select, func, text, or_, and_, String
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 
@@ -62,7 +62,7 @@ class SearchService:
             
             sql = text("""
                 SELECT 
-                    id, name, description, category, 
+                    id, name, description, category_name as category, 
                     1 - (embedding <=> :embedding::vector) as similarity
                 FROM food_items
                 WHERE is_active = true 
@@ -82,7 +82,7 @@ class SearchService:
                 results.append(SearchResultItem(
                     id=str(row.id),
                     name=row.name,
-                    description=row.description,
+                    description=row.description or "",
                     score=float(row.similarity),
                     metadata={
                         "category": row.category,
@@ -99,7 +99,8 @@ class SearchService:
                     or_(
                         FoodItem.name.ilike(search_pattern),
                         FoodItem.description.ilike(search_pattern),
-                        FoodItem.category.ilike(search_pattern)
+                        # Cast enum to string for ilike operation
+                        func.cast(FoodItem.category, String).ilike(search_pattern)
                     )
                 )
             ).limit(limit)
@@ -111,13 +112,14 @@ class SearchService:
                 results.append(SearchResultItem(
                     id=str(item.id),
                     name=item.name,
-                    description=item.description,
+                    description=item.description or "",
                     score=1.0,
                     metadata={
-                        "category": item.category,
+                        "category": item.category_name,
                         "type": "food"
                     }
                 ))
+
         
         # Apply additional filters
         if filters:
@@ -163,7 +165,7 @@ class SearchService:
                 results.append(SearchResultItem(
                     id=str(row.id),
                     name=row.name,
-                    description=row.description,
+                    description=row.description or "",
                     score=float(row.similarity),
                     metadata={
                         "asset_type": row.asset_type,
@@ -193,7 +195,7 @@ class SearchService:
                 results.append(SearchResultItem(
                     id=str(item.id),
                     name=item.name,
-                    description=item.description,
+                    description=item.description or "",
                     score=1.0,
                     metadata={
                         "asset_type": item.asset_type.value if item.asset_type else None,
