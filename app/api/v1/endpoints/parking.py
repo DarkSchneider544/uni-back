@@ -120,7 +120,7 @@ async def allocate_parking(
             "message": "Parking allocated successfully",
             "slot_code": slot.slot_code,
             "vehicle_number": current_user.vehicle_number,
-            "vehicle_type": current_user.vehicle_type.value if current_user.vehicle_type else "car",
+            "vehicle_type": current_user.vehicle_type if current_user.vehicle_type else "car",
             "entry_time": allocation.entry_time.isoformat()
         },
         message="Parking allocated successfully"
@@ -198,7 +198,7 @@ async def get_my_parking(
                 "slot": None,
                 "vehicle": {
                     "vehicle_number": current_user.vehicle_number,
-                    "vehicle_type": current_user.vehicle_type.value if current_user.vehicle_type else None
+                    "vehicle_type": current_user.vehicle_type if current_user.vehicle_type else None
                 },
                 "entry_time": None
             },
@@ -216,7 +216,7 @@ async def get_my_parking(
             },
             "vehicle": {
                 "vehicle_number": allocation.vehicle_number,
-                "vehicle_type": allocation.vehicle_type.value if allocation.vehicle_type else "car"
+                "vehicle_type": allocation.vehicle_type.value if allocation.vehicle_type and hasattr(allocation.vehicle_type, 'value') else (allocation.vehicle_type or "car")
             },
             "entry_time": allocation.entry_time.isoformat()
         },
