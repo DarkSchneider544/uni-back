@@ -2752,21 +2752,811 @@ IT Requests follow a simplified workflow: Create → Approve/Reject. No separate
 
 ---
 
-## Testing
+## 💻 Development Guide
+
+### Setting Up Development Environment
+
+#### 1. Clone and Setup
 
 ```bash
+# Clone the repository
+git clone <repository-url>
+cd unified-office-management
+
+# Create Python virtual environment
+python3.11 -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate  # Linux/Mac
+# OR
+venv\Scripts\activate  # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+#### 2. Database Setup
+
+```bash
+# Option A: Using Docker (Recommended)
+docker compose up -d db  # Start PostgreSQL with pgvector
+
+# Option B: Local PostgreSQL
+# Install PostgreSQL 15+ and pgvector extension
+# Create database manually
+createdb office_management
+psql office_management -c "CREATE EXTENSION vector;"
+```
+
+#### 3. Configure Environment
+
+```bash
+# Create .env file
+cp .env.example .env
+
+# Edit .env with your settings
+nano .env  # or vim, code, etc.
+```
+
+Required environment variables:
+```env
+# Database (adjust for your setup)
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/office_management
+DATABASE_URL_SYNC=postgresql://postgres:postgres@localhost:5432/office_management
+
+# Security (MUST change in production!)
+SECRET_KEY=your-super-secret-key-minimum-32-characters-change-this
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=1440  # 24 hours
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# Application
+APP_NAME=Unified Office Management System
+DEBUG=True  # Set to False in production
+API_V1_PREFIX=/api/v1
+
+# Company
+COMPANY_DOMAIN=company.com
+
+# AI/Vector Search
+EMBEDDING_MODEL=all-MiniLM-L6-v2
+VECTOR_DIMENSION=384
+```
+
+#### 4. Run Migrations
+
+```bash
+# Apply all database migrations
+alembic upgrade head
+
+# Check current migration version
+alembic current
+
+# View migration history
+alembic history
+```
+
+#### 5. Seed Initial Data
+
+```bash
+# Create super admin and sample hierarchical users
+python scripts/seed_hierarchy.py
+
+# This creates:
+# - Super Admin (super.admin@company.com / Admin@123)
+# - Admin (admin@company.com / Admin@123)
+# - 5 Managers (one for each type)
+# - Multiple Team Leads
+# - Sample employees
+
+# Optional: Seed additional sample data (parking, desks, food items)
+python scripts/seed_data.py
+```
+
+#### 6. Run Development Server
+
+```bash
+# Start with auto-reload
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+
+# Or with custom settings
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8080 --log-level debug
+```
+
+#### 7. Access API Documentation
+
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+- **OpenAPI JSON**: http://localhost:8000/openapi.json
+
+### Creating Database Migrations
+
+```bash
+# Auto-generate migration from model changes
+alembic revision --autogenerate -m "description of changes"
+
+# Review the generated migration file in alembic/versions/
+# Edit if necessary, then apply
+alembic upgrade head
+
+# Rollback one migration
+alembic downgrade -1
+
+# Rollback to specific version
+alembic downgrade <revision_id>
+```
+
+### Code Organization Best Practices
+
+#### Adding a New Feature Module
+
+1. **Create Model** (`app/models/new_feature.py`)
+```python
+from sqlalchemy import Column, String, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
+from .base import Base
+import uuid
+
+class NewFeature(Base):
+    __tablename__ = "new_features"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String(200), nullable=False)
+    user_id = Column(String, ForeignKey("users.id"))
+    created_at = Column(DateTime, server_default="now()")
+    
+    # Relationships
+    user = relationship("User", back_populates="new_features")
+```
+
+2. **Create Schemas** (`app/schemas/new_feature.py`)
+```python
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
+
+class NewFeatureBase(BaseModel):
+    name: str
+
+class NewFeatureCreate(NewFeatureBase):
+    pass
+
+class NewFeatureResponse(NewFeatureBase):
+    id: str
+    user_id: str
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+```
+
+3. **Create Service** (`app/services/new_feature_service.py`)
+```python
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from app.models.new_feature import NewFeature
+from app.schemas.new_feature import NewFeatureCreate
+
+class NewFeatureService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+    
+    async def create(self, data: NewFeatureCreate, user_id: str):
+        new_item = NewFeature(**data.dict(), user_id=user_id)
+        self.db.add(new_item)
+        await self.db.commit()
+        await self.db.refresh(new_item)
+        return new_item
+    
+    async def get_all(self):
+        result = await self.db.execute(
+            select(NewFeature).options(selectinload(NewFeature.user))
+        )
+        return result.scalars().all()
+```
+
+4. **Create Endpoints** (`app/api/v1/endpoints/new_feature.py`)
+```python
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.database import get_db
+from app.core.dependencies import get_current_user
+from app.models.user import User
+from app.services.new_feature_service import NewFeatureService
+from app.schemas.new_feature import NewFeatureCreate, NewFeatureResponse
+from app.utils.response import success_response
+
+router = APIRouter(prefix="/new-features", tags=["New Feature"])
+
+@router.post("", response_model=dict)
+async def create_new_feature(
+    data: NewFeatureCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    service = NewFeatureService(db)
+    result = await service.create(data, current_user.id)
+    return success_response(
+        data=NewFeatureResponse.from_orm(result).dict(),
+        message="Created successfully"
+    )
+```
+
+5. **Register Router** (`app/api/v1/router.py`)
+```python
+from app.api.v1.endpoints import new_feature
+
+api_router.include_router(new_feature.router)
+```
+
+6. **Create Migration**
+```bash
+alembic revision --autogenerate -m "add new_feature table"
+alembic upgrade head
+```
+
+### Testing Guidelines
+
+```bash
+# Install test dependencies (if not already installed)
+pip install pytest pytest-asyncio pytest-cov httpx
+
 # Run all tests
-pytest
+pytest -v
 
 # Run with coverage
-pytest --cov=app --cov-report=html
+pytest --cov=app --cov-report=term-missing --cov-report=html
 
 # Run specific test file
-pytest tests/test_api_comprehensive.py -v
+pytest tests/test_attendance.py -v
 
 # Run specific test function
-pytest tests/test_auth.py::test_login -v
+pytest tests/test_auth.py::test_login_success -v
+
+# Run tests matching pattern
+pytest -k "test_parking" -v
+
+# View coverage report
+open htmlcov/index.html  # Open coverage HTML report
 ```
+
+### Debugging
+
+#### Enable Debug Logging
+
+```python
+# In app/main.py
+import logging
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+```
+
+#### VS Code Launch Configuration (`.vscode/launch.json`)
+
+```json
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: FastAPI",
+            "type": "python",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "app.main:app",
+                "--reload",
+                "--host", "127.0.0.1",
+                "--port", "8000"
+            ],
+            "jinja": true,
+            "justMyCode": true,
+            "env": {
+                "DATABASE_URL": "postgresql+asyncpg://postgres:postgres@localhost:5432/office_management"
+            }
+        }
+    ]
+}
+```
+
+#### Database Query Logging
+
+```python
+# In app/core/database.py
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=True,  # Enable SQL query logging
+    future=True
+)
+```
+
+---
+
+## 🚀 Deployment
+
+### Docker Deployment (Recommended)
+
+#### Using Docker Compose
+
+```bash
+# Build and start all services
+docker compose up --build
+
+# Run in detached mode
+docker compose up -d
+
+# View logs
+docker compose logs -f backend
+
+# Stop services
+docker compose down
+
+# Stop and remove volumes (WARNING: deletes database data)
+docker compose down -v
+```
+
+The `docker-compose.yml` includes:
+- **PostgreSQL with pgvector**: Database service
+- **Backend API**: FastAPI application
+- **Auto-migrations**: Runs `alembic upgrade head` on startup
+- **Volume persistence**: Database data persisted in Docker volume
+
+#### Custom Docker Build
+
+```bash
+# Build image
+docker build -t unified-office-backend:latest .
+
+# Run container
+docker run -d \
+  --name office-backend \
+  -p 8000:8000 \
+  -e DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/dbname \
+  -e SECRET_KEY=your-secret-key \
+  unified-office-backend:latest
+
+# View logs
+docker logs -f office-backend
+
+# Stop container
+docker stop office-backend
+
+# Remove container
+docker rm office-backend
+```
+
+### Production Deployment Checklist
+
+#### 1. Environment Configuration
+
+```env
+# Production .env file
+
+# Database - Use production PostgreSQL
+DATABASE_URL=postgresql+asyncpg://prod_user:secure_password@db.prod.com:5432/office_db
+DATABASE_URL_SYNC=postgresql://prod_user:secure_password@db.prod.com:5432/office_db
+
+# Security - CRITICAL: Change these!
+SECRET_KEY=<generate-strong-random-secret-min-32-chars>
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=480  # Shorter expiry for production (8 hours)
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# Application
+APP_NAME=Unified Office Management System
+DEBUG=False  # MUST be False in production
+API_V1_PREFIX=/api/v1
+
+# CORS - Configure allowed origins
+ALLOWED_ORIGINS=https://yourapp.com,https://www.yourapp.com
+
+# Company
+COMPANY_DOMAIN=yourcompany.com
+
+# Vector Search
+EMBEDDING_MODEL=all-MiniLM-L6-v2
+VECTOR_DIMENSION=384
+```
+
+#### 2. Generate Secure SECRET_KEY
+
+```python
+# Python script to generate secure key
+import secrets
+print(secrets.token_urlsafe(32))
+```
+
+Or using command line:
+```bash
+openssl rand -base64 32
+```
+
+#### 3. Database Preparation
+
+```bash
+# Create production database
+createdb -U postgres office_management
+
+# Enable pgvector extension
+psql -U postgres office_management -c "CREATE EXTENSION vector;"
+
+# Run migrations
+alembic upgrade head
+
+# Create super admin (production)
+python scripts/seed_hierarchy.py  # Or create manually via psql
+```
+
+#### 4. Configure Reverse Proxy (Nginx)
+
+```nginx
+# /etc/nginx/sites-available/office-api
+
+upstream backend {
+    server 127.0.0.1:8000;
+}
+
+server {
+    listen 80;
+    server_name api.yourcompany.com;
+    
+    # Redirect HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.yourcompany.com;
+    
+    # SSL certificates
+    ssl_certificate /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+    
+    # SSL configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    
+    # Logging
+    access_log /var/log/nginx/office-api-access.log;
+    error_log /var/log/nginx/office-api-error.log;
+    
+    # Proxy settings
+    location / {
+        proxy_pass http://backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+    
+    # File upload size limit
+    client_max_body_size 10M;
+}
+```
+
+#### 5. Systemd Service (Linux)
+
+```ini
+# /etc/systemd/system/office-backend.service
+
+[Unit]
+Description=Unified Office Management Backend
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/unified-office-management
+Environment="PATH=/var/www/unified-office-management/venv/bin"
+ExecStart=/var/www/unified-office-management/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4
+
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+# Enable and start service
+sudo systemctl enable office-backend
+sudo systemctl start office-backend
+
+# Check status
+sudo systemctl status office-backend
+
+# View logs
+sudo journalctl -u office-backend -f
+```
+
+#### 6. Process Manager (Supervisor - Alternative)
+
+```ini
+# /etc/supervisor/conf.d/office-backend.conf
+
+[program:office-backend]
+command=/var/www/unified-office-management/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4
+directory=/var/www/unified-office-management
+user=www-data
+autostart=true
+autorestart=true
+redirect_stderr=true
+stdout_logfile=/var/log/office-backend.log
+```
+
+```bash
+# Reload supervisor
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start office-backend
+```
+
+#### 7. Performance Optimization
+
+```python
+# app/main.py - Production settings
+
+import uvicorn
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        workers=4,  # Number of worker processes (2 x CPU cores)
+        loop="uvloop",  # Use uvloop for better performance
+        http="httptools",  # Use httptools for faster HTTP parsing
+        log_level="info",
+        access_log=True
+    )
+```
+
+#### 8. Monitoring & Logging
+
+```bash
+# Application logs
+tail -f /var/log/office-backend.log
+
+# Nginx logs
+tail -f /var/log/nginx/office-api-access.log
+tail -f /var/log/nginx/office-api-error.log
+
+# PostgreSQL logs
+tail -f /var/log/postgresql/postgresql-15-main.log
+```
+
+#### 9. Backup Strategy
+
+```bash
+# Database backup script
+#!/bin/bash
+# /usr/local/bin/backup-office-db.sh
+
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR=/backups/office-db
+mkdir -p $BACKUP_DIR
+
+# Backup database
+pg_dump -U postgres office_management | gzip > $BACKUP_DIR/office_db_$DATE.sql.gz
+
+# Keep only last 30 days of backups
+find $BACKUP_DIR -name "office_db_*.sql.gz" -mtime +30 -delete
+
+# Cron job: 0 2 * * * /usr/local/bin/backup-office-db.sh
+```
+
+#### 10. Health Check Endpoint
+
+The API includes a health check endpoint at the root:
+
+```bash
+# Check if API is running
+curl http://localhost:8000/
+
+# Response:
+# {"message": "Unified Office Management API is running", "version": "1.0.0"}
+```
+
+### Cloud Deployment Examples
+
+#### AWS (EC2 + RDS)
+
+1. **Launch EC2 instance** (Ubuntu 22.04, t3.medium or larger)
+2. **Create RDS PostgreSQL** instance (15.x with pgvector extension)
+3. **Configure Security Groups**:
+   - EC2: Allow inbound 8000 (from Load Balancer), 22 (SSH)
+   - RDS: Allow inbound 5432 (from EC2 security group)
+4. **Deploy application** using systemd or Docker
+5. **Setup Application Load Balancer** (ALB) with SSL certificate
+6. **Configure Route 53** for DNS
+
+#### Google Cloud (Cloud Run + Cloud SQL)
+
+```bash
+# Build and push Docker image
+gcloud builds submit --tag gcr.io/PROJECT_ID/office-backend
+
+# Deploy to Cloud Run
+gcloud run deploy office-backend \
+  --image gcr.io/PROJECT_ID/office-backend \
+  --platform managed \
+  --region us-central1 \
+  --set-env-vars DATABASE_URL=... \
+  --set-env-vars SECRET_KEY=... \
+  --allow-unauthenticated
+```
+
+#### DigitalOcean (App Platform)
+
+1. Create PostgreSQL database cluster
+2. Create App Platform app from GitHub repo
+3. Configure environment variables
+4. Enable automatic deployments from git
+
+---
+
+## 🧪 Testing
+
+### Running Tests
+
+```bash
+# Install test dependencies (if not in requirements.txt)
+pip install pytest pytest-asyncio pytest-cov httpx aiosqlite
+
+# Run all tests
+pytest -v
+
+# Run with coverage report
+pytest --cov=app --cov-report=term-missing --cov-report=html
+
+# Run specific test file
+pytest tests/test_attendance.py -v
+
+# Run specific test function
+pytest tests/test_auth.py::test_login_success -v
+
+# Run tests matching pattern
+pytest -k "attendance" -v
+
+# Run tests in parallel (faster)
+pytest -n auto  # requires pytest-xdist
+```
+
+### Test Coverage
+
+```bash
+# Generate HTML coverage report
+pytest --cov=app --cov-report=html
+
+# Open coverage report in browser
+open htmlcov/index.html  # Mac
+xdg-open htmlcov/index.html  # Linux
+start htmlcov/index.html  # Windows
+```
+
+### Test Structure
+
+```
+tests/
+├── conftest.py              # Pytest fixtures (test database, client)
+├── test_auth.py             # Authentication tests
+├── test_users.py            # User management tests
+├── test_attendance.py       # Attendance workflow tests
+├── test_leave.py            # Leave management tests
+├── test_parking.py          # Parking operations tests
+├── test_desks.py            # Desk booking tests
+├── test_food.py             # Food ordering tests
+├── test_it_assets.py        # IT asset management tests
+├── test_it_requests.py      # IT request workflow tests
+├── test_projects.py         # Project management tests
+└── test_search.py           # Semantic search tests
+```
+
+### Test Database
+
+Tests use a separate SQLite database by default for faster execution:
+
+```python
+# conftest.py
+TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+# Or use test PostgreSQL database
+TEST_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/office_test"
+```
+
+### Writing Tests
+
+Example test file structure:
+
+```python
+# tests/test_my_feature.py
+import pytest
+from httpx import AsyncClient
+
+@pytest.mark.asyncio
+async def test_create_item(client: AsyncClient, employee_token: str):
+    """Test creating a new item"""
+    response = await client.post(
+        "/api/v1/items",
+        json={"name": "Test Item"},
+        headers={"Authorization": f"Bearer {employee_token}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "id" in data["data"]
+
+@pytest.mark.asyncio
+async def test_get_items(client: AsyncClient, employee_token: str):
+    """Test retrieving items"""
+    response = await client.get(
+        "/api/v1/items",
+        headers={"Authorization": f"Bearer {employee_token}"}
+    )
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+```
+
+### CI/CD Pipeline Example (GitHub Actions)
+
+```yaml
+# .github/workflows/test.yml
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: office_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+      
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/office_test
+        run: |
+          pytest --cov=app --cov-report=xml
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+```
+
+---
 
 ## Environment Variables
 
@@ -3777,35 +4567,518 @@ return create_paginated_response(
 
 ---
 
-## Changelog
+## 🔧 Troubleshooting
 
-### Version 1.0.0 (February 2026)
+### Common Issues and Solutions
 
-**Features:**
-- Complete office management system with 12 modules
-- Role-based access control with 5-tier hierarchy
-- JWT authentication with refresh tokens
-- Semantic search using sentence transformers
-- Docker containerization
+#### 1. Database Connection Errors
 
-**IT Requests Module:**
-- Simplified workflow: Create → Approve/Reject
-- Full user name resolution in responses
-- Relationship loading with selectinload for async safety
-- Support for related asset linking
+**Error:** `could not translate host name "db" to address`
 
-**Technical Improvements:**
-- Async-first architecture with SQLAlchemy 2.0
-- Proper relationship loading to avoid MissingGreenlet errors
-- Consistent response formatting across all endpoints
-- Comprehensive error handling
+**Solution:**
+```bash
+# If using Docker Compose
+docker compose down
+docker compose up --build
+
+# If using local database
+# Check PostgreSQL is running
+sudo systemctl status postgresql
+
+# Test connection
+psql -U postgres -h localhost -d office_management
+```
+
+**Error:** `FATAL: password authentication failed`
+
+**Solution:**
+- Check DATABASE_URL in .env matches PostgreSQL credentials
+- Ensure user exists and has correct password
+- For Docker: Check docker-compose.yml environment variables
+
+#### 2. Migration Errors
+
+**Error:** `Can't locate revision identified by 'xxxxx'`
+
+**Solution:**
+```bash
+# Reset migration history (WARNING: Development only!)
+# Drop all tables
+psql -U postgres office_management -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+
+# Recreate from scratch
+alembic upgrade head
+python scripts/seed_hierarchy.py
+```
+
+**Error:** `Target database is not up to date`
+
+**Solution:**
+```bash
+# Check current version
+alembic current
+
+# Upgrade to head
+alembic upgrade head
+
+# If that fails, check for conflicts in migration files
+alembic history
+```
+
+#### 3. pgvector Extension Errors
+
+**Error:** `type "vector" does not exist`
+
+**Solution:**
+```bash
+# Install pgvector extension
+psql -U postgres office_management -c "CREATE EXTENSION vector;"
+
+# Verify installation
+psql -U postgres office_management -c "SELECT * FROM pg_extension WHERE extname = 'vector';"
+```
+
+**For Docker:**
+```bash
+# Use pgvector-enabled PostgreSQL image
+# In docker-compose.yml:
+#   image: pgvector/pgvector:pg16
+```
+
+#### 4. Import Errors
+
+**Error:** `ModuleNotFoundError: No module named 'app'`
+
+**Solution:**
+```bash
+# Ensure you're in the correct directory
+cd unified-office-management
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run from project root
+uvicorn app.main:app --reload
+```
+
+#### 5. JWT Token Errors
+
+**Error:** `{"detail": "Could not validate credentials"}`
+
+**Solution:**
+- Check Authorization header format: `Bearer <token>`
+- Verify token hasn't expired (24-hour default)
+- Ensure SECRET_KEY in .env matches server's SECRET_KEY
+- Try logging in again to get fresh token
+
+**Get new token:**
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "admin@company.com", "password": "Admin@123"}'
+```
+
+#### 6. Async/SQLAlchemy Errors
+
+**Error:** `greenlet_spawn has not been called; can't call await_only()`
+
+**Solution:**
+- Always use `selectinload` for relationships in async context
+- Don't access relationships directly without eager loading
+
+```python
+# ❌ Wrong
+user = await db.get(User, user_id)
+team_lead = user.team_lead  # Error!
+
+# ✅ Correct
+result = await db.execute(
+    select(User)
+    .where(User.id == user_id)
+    .options(selectinload(User.team_lead))
+)
+user = result.scalar_one()
+team_lead = user.team_lead  # Works!
+```
+
+#### 7. Port Already in Use
+
+**Error:** `Address already in use: 8000`
+
+**Solution:**
+```bash
+# Find process using port 8000
+lsof -i :8000  # Mac/Linux
+netstat -ano | findstr :8000  # Windows
+
+# Kill the process
+kill -9 <PID>  # Mac/Linux
+taskkill /PID <PID> /F  # Windows
+
+# Or use different port
+uvicorn app.main:app --reload --port 8080
+```
+
+#### 8. CORS Errors
+
+**Error:** `No 'Access-Control-Allow-Origin' header`
+
+**Solution:**
+```python
+# In app/main.py, update CORS settings
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "https://yourapp.com"],  # Specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+#### 9. Embedding Service Errors
+
+**Error:** `Model 'all-MiniLM-L6-v2' not found`
+
+**Solution:**
+```bash
+# First run downloads the model (~80MB)
+# Ensure internet connection
+# Model caches to ~/.cache/torch/sentence_transformers/
+
+# If behind proxy, set environment variables
+export HTTP_PROXY=http://proxy:port
+export HTTPS_PROXY=http://proxy:port
+```
+
+**Error:** `ImportError: cannot import name 'SentenceTransformer'`
+
+**Solution:**
+```bash
+# Reinstall sentence-transformers
+pip uninstall sentence-transformers torch
+pip install torch==2.1.2 sentence-transformers==2.2.2
+```
+
+#### 10. Seeding Errors
+
+**Error:** `User with email already exists`
+
+**Solution:**
+```bash
+# Script is idempotent, but if you want to reset
+psql -U postgres office_management
+
+# Delete existing users
+DELETE FROM users;
+
+# Run seed again
+python scripts/seed_hierarchy.py
+```
+
+#### 11. Docker Build Errors
+
+**Error:** `failed to solve with frontend dockerfile.v0`
+
+**Solution:**
+```bash
+# Clear Docker cache
+docker system prune -a
+
+# Rebuild without cache
+docker compose build --no-cache
+docker compose up
+```
+
+#### 12. Performance Issues
+
+**Slow Queries:**
+
+```bash
+# Enable query logging
+# In app/core/database.py, set echo=True
+
+# Check slow queries in PostgreSQL
+psql -U postgres office_management
+```
+
+```sql
+-- Enable query logging
+ALTER DATABASE office_management SET log_min_duration_statement = 1000;  -- Log queries > 1s
+
+-- Check running queries
+SELECT pid, now() - query_start AS duration, query 
+FROM pg_stat_activity 
+WHERE state = 'active' AND query NOT LIKE '%pg_stat_activity%'
+ORDER BY duration DESC;
+```
+
+**Too Many Connections:**
+
+```bash
+# Check max connections
+psql -U postgres -c "SHOW max_connections;"
+
+# Check current connections
+psql -U postgres -c "SELECT count(*) FROM pg_stat_activity;"
+
+# Increase max_connections in postgresql.conf
+# max_connections = 200
+```
+
+#### 13. Testing Issues
+
+**Error:** `No database found for testing`
+
+**Solution:**
+```bash
+# Create test database
+createdb office_management_test
+
+# Or use SQLite for tests (faster)
+# In conftest.py:
+TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+```
+
+**Error:** `fixture 'client' not found`
+
+**Solution:**
+```bash
+# Ensure conftest.py exists in tests/ directory
+# Check pytest discovers tests
+pytest --collect-only
+```
 
 ---
 
-## License
+## 📚 Additional Resources
+
+### API Documentation
+
+- **Interactive Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+- **OpenAPI JSON**: http://localhost:8000/openapi.json
+
+### Related Documentation
+
+- [FastAPI Documentation](https://fastapi.tiangolo.com/)
+- [SQLAlchemy 2.0 Async](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html)
+- [Pydantic V2](https://docs.pydantic.dev/latest/)
+- [pgvector](https://github.com/pgvector/pgvector)
+- [Alembic](https://alembic.sqlalchemy.org/)
+- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+
+### Project Links
+
+- **Repository**: <your-repo-url>
+- **Issue Tracker**: <your-repo-url>/issues
+- **Wiki**: <your-repo-url>/wiki
+
+---
+
+## 📝 Changelog
+
+### Version 1.0.0 (February 2026)
+
+**Initial Release:**
+- ✅ Complete office management system with 12 modules
+- ✅ Role-based access control with 5-tier hierarchy
+- ✅ JWT authentication with access and refresh tokens
+- ✅ Semantic search using sentence transformers (all-MiniLM-L6-v2)
+- ✅ Docker containerization with docker-compose
+- ✅ PostgreSQL with pgvector for vector similarity search
+- ✅ Async-first architecture with SQLAlchemy 2.0
+- ✅ Comprehensive API documentation (Swagger + ReDoc)
+- ✅ Database migrations with Alembic
+- ✅ Seed scripts for initial data
+- ✅ Hierarchical approval workflows
+- ✅ Auto-generated codes (user, asset, request, project, order)
+- ✅ Production-ready deployment configurations
+
+**Modules:**
+1. Authentication & User Management
+2. Attendance Tracking
+3. Leave Management
+4. Parking Management
+5. Desk & Conference Room Booking
+6. Cafeteria Table Booking
+7. Food Ordering
+8. IT Asset Management
+9. IT Request Management
+10. Project Management
+11. Holiday Management
+12. Semantic Search
+
+**Technical Highlights:**
+- Proper async relationship loading with `selectinload`
+- Consistent response formatting across all endpoints
+- Comprehensive error handling and validation
+- RBAC enforcement at endpoint level
+- Connection pooling and query optimization
+- Vector indexing for fast semantic search
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. **Fork the repository**
+2. **Create a feature branch**
+   ```bash
+   git checkout -b feature/amazing-feature
+   ```
+3. **Make your changes**
+   - Follow existing code style
+   - Add tests for new features
+   - Update documentation
+4. **Commit your changes**
+   ```bash
+   git commit -m "Add amazing feature"
+   ```
+5. **Push to branch**
+   ```bash
+   git push origin feature/amazing-feature
+   ```
+6. **Open a Pull Request**
+
+### Code Style
+
+- Follow PEP 8 for Python code
+- Use type hints
+- Write docstrings for functions and classes
+- Keep functions focused and small
+- Use async/await consistently
+
+### Testing Requirements
+
+- All new features must have tests
+- Maintain or improve code coverage
+- Tests must pass before merging
+
+```bash
+# Run tests before committing
+pytest --cov=app --cov-report=term-missing
+```
+
+---
+
+## 📄 License
 
 MIT License
 
-## Support
+Copyright (c) 2026 Unified Office Management System
 
-For issues and questions, please create an issue in the repository.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## 🆘 Support
+
+### Getting Help
+
+- **Documentation**: Read this README and API docs at http://localhost:8000/docs
+- **Issues**: Report bugs or request features via GitHub Issues
+- **Discussions**: Ask questions in GitHub Discussions
+- **Email**: support@yourcompany.com (if applicable)
+
+### Reporting Issues
+
+When reporting issues, please include:
+
+1. **Environment Information**:
+   - OS (Linux/Mac/Windows)
+   - Python version (`python --version`)
+   - PostgreSQL version (`psql --version`)
+   - Docker version (if using Docker)
+
+2. **Steps to Reproduce**:
+   - Detailed steps to reproduce the issue
+   - Expected behavior vs actual behavior
+   - Error messages and stack traces
+
+3. **Additional Context**:
+   - Screenshots if applicable
+   - Relevant configuration (.env values without secrets)
+   - Database migration version (`alembic current`)
+
+### Feature Requests
+
+We welcome feature requests! Please:
+- Check existing issues first to avoid duplicates
+- Describe the use case and business value
+- Provide examples of how the feature would work
+- Consider contributing the feature yourself via PR
+
+---
+
+## 🎯 Roadmap
+
+### Planned Features
+
+- [ ] **Websocket Support**: Real-time notifications for approvals
+- [ ] **Email Notifications**: Automated emails for important events
+- [ ] **Analytics Dashboard**: Reports and insights
+- [ ] **Mobile Push Notifications**: Mobile app integration
+- [ ] **File Uploads**: Support for documents and images
+- [ ] **Calendar Integration**: Sync with Google Calendar, Outlook
+- [ ] **Audit Logs**: Comprehensive activity logging
+- [ ] **Export Features**: PDF/Excel exports for reports
+- [ ] **Multi-tenancy**: Support for multiple companies
+- [ ] **Advanced Search**: Full-text search across all modules
+- [ ] **Two-Factor Authentication**: Enhanced security
+- [ ] **API Rate Limiting**: Prevent abuse
+- [ ] **GraphQL API**: Alternative to REST
+- [ ] **Metrics & Monitoring**: Prometheus/Grafana integration
+
+### Future Improvements
+
+- Performance optimization with Redis caching
+- Elasticsearch integration for advanced search
+- Kubernetes deployment configurations
+- Automated testing and CI/CD pipeline
+- API versioning strategy
+- Internationalization (i18n) support
+- Dark mode friendly responses
+- Webhook support for integrations
+
+---
+
+## 👥 Authors
+
+- **Project Lead**: Your Name
+- **Contributors**: See GitHub contributors page
+
+---
+
+## 🙏 Acknowledgments
+
+- FastAPI team for the excellent framework
+- SQLAlchemy team for the powerful ORM
+- pgvector developers for vector similarity search
+- Sentence Transformers team for pre-trained models
+- Open source community for continuous inspiration
+
+---
+
+**Made with ❤️ using FastAPI, PostgreSQL, and Python**
+
+---
