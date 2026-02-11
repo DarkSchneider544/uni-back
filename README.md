@@ -1,29 +1,52 @@
 # Unified Office Management System
 
-A comprehensive, production-ready backend for managing office operations including floor planning, parking, desk booking, cafeteria, attendance, leave management, IT assets, and project management.
+A comprehensive, production-ready backend for managing office operations including parking, desk booking, cafeteria, attendance, leave management, IT assets, and project management.
+
+## 📋 Table of Contents
+
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Quick Start](#quick-start)
+- [User Roles & Hierarchy](#user-roles--hierarchy)
+- [API Endpoints Documentation](#api-endpoints-documentation)
+  - [Authentication](#1-authentication-endpoints)
+  - [User Management](#2-user-management-endpoints)
+  - [Attendance](#3-attendance-endpoints)
+  - [Leave Management](#4-leave-management-endpoints)
+  - [Parking](#5-parking-endpoints)
+  - [Desk & Conference Rooms](#6-desk--conference-room-endpoints)
+  - [Cafeteria & Food](#7-cafeteria--food-ordering-endpoints)
+  - [IT Assets](#8-it-asset-management-endpoints)
+  - [IT Requests](#9-it-request-endpoints)
+  - [Projects](#10-project-management-endpoints)
+  - [Holidays](#11-holiday-management-endpoints)
+  - [Search](#12-semantic-search-endpoints)
+- [Testing](#testing)
+- [Environment Variables](#environment-variables)
 
 ## Features
 
-- **Authentication & Authorization**: JWT-based auth with RBAC
-- **User Management**: Multi-role user system with hierarchy
-- **Dynamic Floor Planning**: Visual grid-based floor plans with versioning
-- **Parking Management**: Employee and visitor parking allocation
-- **Desk Booking**: Time-based desk reservations
-- **Cafeteria Management**: Table booking and food ordering
-- **Attendance Tracking**: Check-in/out with approval workflow
-- **Leave Management**: Multi-level leave approval system
-- **IT Asset Management**: Hardware tracking and assignment
-- **IT Support Requests**: Request lifecycle management
-- **Project Management**: Team lead project requests
-- **Semantic Search**: AI-powered search for food and IT assets
+- **Authentication & Authorization**: JWT-based auth with role-based access control (RBAC)
+- **User Management**: 5-tier hierarchical user system (Super Admin → Admin → Manager → Team Lead → Employee)
+- **Parking Management**: Employee parking slot allocation and tracking
+- **Desk & Conference Room Booking**: Time-based desk and meeting room reservations
+- **Cafeteria Management**: Table booking and food ordering system
+- **Attendance Tracking**: Check-in/out with hierarchical approval workflow
+- **Leave Management**: Multi-level leave request and approval system
+- **IT Asset Management**: Hardware inventory, tracking, and assignment
+- **IT Support Requests**: IT request lifecycle from submission to resolution
+- **Project Management**: Team lead project request and approval
+- **Holiday Management**: Company holiday calendar
+- **Semantic Search**: AI-powered vector search for food items and IT assets
 
 ## Tech Stack
 
 - **Framework**: FastAPI (Python 3.11+)
-- **Database**: PostgreSQL with pgvector
-- **ORM**: SQLAlchemy 2.0
+- **Database**: PostgreSQL with pgvector extension
+- **ORM**: SQLAlchemy 2.0 (Async)
 - **Migrations**: Alembic
-- **Authentication**: OAuth2 + JWT
+- **Authentication**: OAuth2 with JWT (HS256)
+- **AI/ML**: Sentence Transformers for semantic embeddings
 - **Containerization**: Docker + Docker Compose
 
 ## Quick Start
@@ -32,6 +55,7 @@ A comprehensive, production-ready backend for managing office operations includi
 
 - Docker and Docker Compose
 - Python 3.11+ (for local development)
+- PostgreSQL 15+ with pgvector extension
 
 ### Running with Docker
 
@@ -47,10 +71,17 @@ docker compose up --build
 # Swagger docs at http://localhost:8000/docs
 ```
 
-### Default Super Admin Credentials
+### Default Credentials
 
-- **Email**: super.admin@company.com
-- **Password**: Admin@123
+**Super Admin**
+- Email: `super.admin@company.com`
+- Password: `Admin@123`
+- Role: Full system access
+
+**Admin**
+- Email: `admin@company.com`
+- Password: `Admin@123`
+- Role: User and system management
 
 ### Local Development
 
@@ -64,136 +95,1813 @@ pip install -r requirements.txt
 
 # Set environment variables
 cp .env.example .env
-# Edit .env with your configuration
+# Edit .env with your PostgreSQL connection string
 
 # Run migrations
 alembic upgrade head
 
+# Seed initial data (creates super admin and sample users)
+python scripts/seed_hierarchy.py
+
 # Start the server
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-## API Documentation
+## User Roles & Hierarchy
 
-Once running, access the interactive API documentation:
-
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-- **OpenAPI JSON**: http://localhost:8000/openapi.json
-
-## Project Structure
+### Role Structure
 
 ```
-/app
- ├── main.py              # Application entry point
- ├── core/                # Core configuration
- │    ├── config.py       # Settings management
- │    ├── database.py     # Database connection
- │    ├── security.py     # JWT and password utilities
- │    └── dependencies.py # FastAPI dependencies
- ├── api/v1/              # API endpoints
- │    ├── router.py       # Main router
- │    └── endpoints/      # Individual endpoint modules
- ├── models/              # SQLAlchemy models
- ├── schemas/             # Pydantic schemas
- ├── services/            # Business logic
- ├── middleware/          # Custom middleware
- ├── utils/               # Utility functions
- └── tests/               # Test suite
+┌─────────────────────────────────────────────────────────────────┐
+│  SUPER_ADMIN (super.admin@company.com)                          │
+│       │ creates & manages                                        │
+│       ▼                                                          │
+│    ADMIN (admin@company.com)                                     │
+│       │ creates & manages                                        │
+│       ▼                                                          │
+│  MANAGER (5 types):                                              │
+│    - Parking Manager (parking.manager@company.com)               │
+│    - Attendance Manager (attendance.manager@company.com)         │
+│    - Desk & Conference Manager (desk.manager@company.com)        │
+│    - Cafeteria Manager (cafeteria.manager@company.com)           │
+│    - IT Support Manager (it.manager@company.com)                 │
+│       │ creates & manages                                        │
+│       ▼                                                          │
+│  TEAM_LEAD (Department-wise: Dev, Sales, AI, HR, etc.)          │
+│       │ manages team members                                     │
+│       ▼                                                          │
+│  EMPLOYEE (Regular employees)                                    │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Roles & Permissions
+### Role Permissions
 
-| Role | Permissions |
-|------|-------------|
-| Super Admin | Full system access, manage admins |
-| Admin | Manage users, buildings, floor plans |
-| Manager | Domain-specific management |
-| Team Lead | Team attendance/leave approval, projects |
-| Employee | Self-service operations |
+| Role | Can Create | Can Approve | Special Permissions |
+|------|-----------|-------------|---------------------|
+| **SUPER_ADMIN** | ADMIN | Admin's requests | Full system access, change any password |
+| **ADMIN** | MANAGER, TEAM_LEAD, EMPLOYEE | Manager's requests | Manage users, toggle user status |
+| **MANAGER** | EMPLOYEE (varies by type) | Team Lead's requests | Domain-specific management (Parking, IT, etc.) |
+| **TEAM_LEAD** | None | Employee's requests | Approve team attendance/leave, create projects |
+| **EMPLOYEE** | None | None | Self-service: parking, desks, cafeteria, attendance, leave |
 
-## Environment Variables
+### Manager Types & Responsibilities
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| DATABASE_URL | PostgreSQL connection string | - |
-| SECRET_KEY | JWT secret key | - |
-| ACCESS_TOKEN_EXPIRE_MINUTES | Token expiry | 1440 |
-| COMPANY_DOMAIN | Email domain | company.com |
-| EMBEDDING_MODEL | Sentence transformer model | all-MiniLM-L6-v2 |
+1. **Parking Manager** (`ManagerType.PARKING`)
+   - Manage parking slots
+   - View all parking allocations
+   - Track entry/exit logs
+
+2. **Attendance Manager** (`ManagerType.ATTENDANCE`)
+   - View ALL company-wide attendance
+   - Approve/override any attendance
+   - Create department-wise Team Leads
+   - Generate attendance reports
+
+3. **Desk & Conference Manager** (`ManagerType.DESK_CONFERENCE`)
+   - Manage desks and conference rooms
+   - View all bookings
+   - Configure room availability
+
+4. **Cafeteria Manager** (`ManagerType.CAFETERIA`)
+   - Manage cafeteria tables
+   - Manage food menu items
+   - View all orders and bookings
+
+5. **IT Support Manager** (`ManagerType.IT_SUPPORT`)
+   - Manage IT asset inventory
+   - Assign/unassign IT equipment
+   - Approve IT requests
+   - Track asset lifecycle
+
+### Approval Hierarchy
+
+All attendance and leave requests follow this approval chain:
+
+```
+EMPLOYEE submits
+    ↓
+TEAM_LEAD approves (Level 1)
+    ↓
+MANAGER approves (Level 2 - if Team Lead submits)
+    ↓
+ADMIN approves (if Manager submits)
+    ↓
+SUPER_ADMIN approves (if Admin submits)
+```
+
+## API Endpoints Documentation
+
+**Base URL**: `http://localhost:8000/api/v1`
+
+**Authentication**: All endpoints (except login) require JWT Bearer token in the `Authorization` header:
+```
+Authorization: Bearer <access_token>
+```
+
+**Standard Response Format**:
+```json
+{
+  "success": true,
+  "data": { ... },
+  "message": "Operation successful",
+  "timestamp": "2026-02-11T10:30:00Z"
+}
+```
+
+**Paginated Response Format**:
+```json
+{
+  "success": true,
+  "data": [...],
+  "total": 100,
+  "page": 1,
+  "page_size": 20,
+  "message": "Retrieved successfully",
+  "timestamp": "2026-02-11T10:30:00Z"
+}
+```
+
+---
+
+## 1. Authentication Endpoints
+
+### `POST /auth/login`
+**Description**: Authenticate user and receive JWT tokens
+
+**Access**: Public (no authentication required)
+
+**Request Body**:
+```json
+{
+  "email": "admin@company.com",
+  "password": "Admin@123"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIs...",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
+    "token_type": "bearer",
+    "expires_in": 86400,
+    "user_id": "uuid",
+    "role": "admin",
+    "manager_type": null
+  },
+  "message": "Login successful"
+}
+```
+
+**Error Responses**:
+- `401 Unauthorized`: Invalid credentials
+- `403 Forbidden`: User is inactive
+
+---
+
+### `POST /auth/refresh`
+**Description**: Refresh access token using refresh token
+
+**Request Body**:
+```json
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+**Response**: Same as login response
+
+---
+
+### `POST /auth/change-password`
+**Description**: Change own password
+
+**Authentication**: Required
+
+**Request Body**:
+```json
+{
+  "current_password": "OldPass@123",
+  "new_password": "NewPass@123"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Password changed successfully"
+}
+```
+
+---
+
+### `GET /auth/me`
+**Description**: Get current authenticated user's information
+
+**Authentication**: Required
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "user_code": "AB1234",
+    "email": "user@company.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "role": "employee",
+    "manager_type": null,
+    "department": "Engineering",
+    "team_lead_code": "TL0001",
+    "manager_code": "MG0001",
+    "is_active": true,
+    "created_at": "2026-01-01T00:00:00Z"
+  }
+}
+```
+
+---
+
+## 2. User Management Endpoints
+
+### `POST /users`
+**Description**: Create a new user
+
+**Access**: ADMIN or SUPER_ADMIN only
+
+**Request Body**:
+```json
+{
+  "first_name": "John",
+  "last_name": "Doe",
+  "email": "john.doe@company.com",  // Optional - auto-generated if not provided
+  "password": "SecurePass@123",
+  "role": "employee",  // employee | team_lead | manager | admin
+  "phone": "1234567890",  // Optional
+  "department": "Engineering",  // Required for team_lead
+  "manager_type": "attendance",  // Required for manager role
+  "team_lead_code": "TL0001",  // Optional - assigns employee to team
+  "manager_code": "MG0001",  // Optional - auto-assigned
+  "vehicle_number": "ABC123",  // Optional
+  "vehicle_type": "car"  // Optional: car | bike | two_wheeler
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "user_code": "AB1234",  // Auto-generated 6-char code
+    "email": "john.doe@company.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "role": "employee",
+    "department": "Engineering",
+    "team_lead_code": "TL0001",
+    "is_active": true
+  },
+  "message": "User created successfully"
+}
+```
+
+**Validation Rules**:
+- Email must be unique
+- Password min 8 characters
+- `manager_type` required if role is "manager"
+- `department` required if role is "team_lead"
+- SUPER_ADMIN cannot be created via API
+
+---
+
+### `GET /users`
+**Description**: List all users (paginated)
+
+**Access**: ADMIN+ can see all, Team Lead sees team, others see self only
+
+**Query Parameters**:
+- `page` (int, default: 1)
+- `page_size` (int, default: 20, max: 100)
+- `role` (optional): Filter by role
+- `department` (optional): Filter by department
+- `is_active` (optional): Filter active/inactive users
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "user_code": "AB1234",
+      "email": "user@company.com",
+      "first_name": "John",
+      "last_name": "Doe",
+      "role": "employee",
+      "department": "Engineering",
+      "is_active": true
+    }
+  ],
+  "total": 50,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+---
+
+### `GET /users/me`
+**Description**: Get current user's profile
+
+**Authentication**: Required
+
+**Response**: Same as GET /auth/me
+
+---
+
+### `GET /users/{user_id}`
+**Description**: Get specific user by ID
+
+**Access**: ADMIN+ can view any, others can only view self
+
+**Response**: Single user object (same structure as list)
+
+---
+
+### `PUT /users/{user_id}`
+**Description**: Update user details
+
+**Access**: ADMIN+ can update any, users can update limited fields for self
+
+**Request Body** (all fields optional):
+```json
+{
+  "first_name": "Jane",
+  "last_name": "Smith",
+  "phone": "9876543210",
+  "department": "Sales",
+  "team_lead_code": "TL0002",  // Admin/superior only
+  "manager_code": "MG0001",  // Admin/superior only
+  "is_active": true,  // Admin+ only
+  "vehicle_number": "XYZ789",
+  "vehicle_type": "bike"
+}
+```
+
+**Response**: Updated user object
+
+---
+
+### `DELETE /users/{user_id}`
+**Description**: Soft delete a user (marks as deleted, doesn't remove from DB)
+
+**Access**: ADMIN or SUPER_ADMIN only
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "User deleted successfully"
+}
+```
+
+---
+
+### `POST /users/{user_id}/toggle-active`
+**Description**: Activate or deactivate a user
+
+**Access**: ADMIN or SUPER_ADMIN only
+
+**Response**: Updated user object with new `is_active` status
+
+---
+
+### `POST /users/{user_id}/change-password`
+**Description**: Admin changes any user's password
+
+**Access**: SUPER_ADMIN only
+
+**Request Body**:
+```json
+{
+  "new_password": "NewSecurePass@123"
+}
+```
+
+---
+
+### `POST /users/{user_id}/change-role`
+**Description**: Change user's role
+
+**Access**: SUPER_ADMIN only
+
+**Request Body**:
+```json
+{
+  "new_role": "team_lead",
+  "department": "Engineering",  // Required if changing to team_lead
+  "manager_type": "attendance",  // Required if changing to manager
+  "team_lead_code": "TL0001",  // Required if changing to employee
+  "manager_code": "MG0001"  // Required if changing to employee or team_lead
+}
+```
+
+---
+
+## 3. Attendance Endpoints
+
+### `POST /attendance/check-in`
+**Description**: Record check-in for current user
+
+**Authentication**: Required (all roles can use)
+
+**Request Body** (optional):
+```json
+{
+  "notes": "Started work early today"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "user_code": "AB1234",
+    "date": "2026-02-11",
+    "status": "draft",  // draft | pending_approval | approved | rejected
+    "first_check_in": "09:00:00",
+    "last_check_out": null,
+    "total_hours": null,
+    "entries": [
+      {
+        "id": "uuid",
+        "check_in": "2026-02-11T09:00:00Z",
+        "check_out": null,
+        "entry_type": "regular",
+        "duration_hours": null,
+        "notes": "Started work early today"
+      }
+    ]
+  },
+  "message": "Check-in recorded successfully"
+}
+```
+
+**Business Logic**:
+- Creates attendance record for current date if doesn't exist
+- Multiple check-ins/check-outs allowed per day
+- Status starts as "draft"
+
+---
+
+### `POST /attendance/check-out`
+**Description**: Record check-out for an entry
+
+**Request Body**:
+```json
+{
+  "entry_id": "uuid",  // The check-in entry to check out
+  "notes": "Completed daily tasks"
+}
+```
+
+**Response**: Updated attendance record with calculated duration
+
+---
+
+### `POST /attendance/{attendance_id}/submit`
+**Description**: Submit attendance for approval
+
+**Authentication**: Required
+
+**Response**: Attendance with status changed to "pending_approval"
+
+**Business Logic**:
+- Changes status from "draft" to "pending_approval"
+- Sets `submitted_at` timestamp
+- Auto-assigns approver based on hierarchy
+
+---
+
+### `POST /attendance/{attendance_id}/approve`
+**Description**: Approve or reject attendance
+
+**Access**: TEAM_LEAD or above
+
+**Request Body**:
+```json
+{
+  "action": "approve",  // "approve" or "reject"
+  "notes": "Approved - all good",  // Optional for approve
+  "rejection_reason": "Missing check-out times"  // Required if action is "reject"
+}
+```
+
+**Response**: Updated attendance with new status
+
+**Business Logic**:
+- Team Lead can approve their team members' attendance
+- Manager can approve Team Lead's attendance
+- Admin can approve Manager's attendance
+- Attendance Manager can approve/view ALL attendance
+
+---
+
+### `GET /attendance/my`
+**Description**: Get current user's attendance records
+
+**Query Parameters**:
+- `page` (int, default: 1)
+- `page_size` (int, default: 20)
+- `start_date` (date, optional): Filter from date
+- `end_date` (date, optional): Filter to date
+
+**Response**: Paginated list of attendance records
+
+---
+
+### `GET /attendance/pending-approvals`
+**Description**: Get attendance records pending approval
+
+**Access**: TEAM_LEAD or above
+
+**Query Parameters**: Same as `/my`
+
+**Response**: Paginated list of attendance awaiting approval
+
+**Business Logic**:
+- Team Lead sees their team's pending attendance
+- Manager sees Team Leads' pending attendance
+- Attendance Manager sees ALL pending attendance
+
+---
+
+### `GET /attendance`
+**Description**: List all attendance records (filtered by permissions)
+
+**Query Parameters**:
+- `page`, `page_size`
+- `user_id` (uuid, optional): Filter by specific user
+- `status` (optional): draft | pending_approval | approved | rejected
+- `start_date`, `end_date`
+
+**Access**:
+- Attendance Manager: ALL records
+- Team Lead: Team members' records
+- Others: Only own records
+
+---
+
+### `GET /attendance/{attendance_id}`
+**Description**: Get specific attendance record
+
+**Access**: Owner or superior in hierarchy
+
+---
+
+## 4. Leave Management Endpoints
+
+### `POST /leave/requests`
+**Description**: Create a leave request
+
+**Authentication**: Required
+
+**Request Body**:
+```json
+{
+  "leave_type": "casual",  // casual | sick | privilege | unpaid
+  "start_date": "2026-02-15",
+  "end_date": "2026-02-16",
+  "reason": "Personal work",
+  "is_half_day": false,  // Optional
+  "half_day_type": null  // "first_half" or "second_half" if is_half_day is true
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "user_code": "AB1234",
+    "leave_type": "casual",
+    "start_date": "2026-02-15",
+    "end_date": "2026-02-16",
+    "total_days": 2.0,
+    "status": "pending_level1",  // pending_level1 | approved_level1 | approved_final | rejected
+    "reason": "Personal work",
+    "created_at": "2026-02-11T10:00:00Z"
+  },
+  "message": "Leave request created successfully"
+}
+```
+
+**Validation**:
+- Cannot request leave for past dates
+- Cannot overlap with existing approved leave
+- Checks available leave balance
+
+---
+
+### `GET /leave/requests`
+**Description**: List leave requests
+
+**Query Parameters**:
+- `page`, `page_size`
+- `user_id` (optional): Filter by user (Admin+ only)
+- `status` (optional): Filter by status
+- `leave_type` (optional)
+- `start_date`, `end_date`: Date range filter
+
+**Access**:
+- ADMIN+: All requests
+- Team Lead: Team members' requests
+- Others: Own requests only
+
+---
+
+### `GET /leave/requests/my`
+**Description**: Get current user's leave requests
+
+---
+
+### `GET /leave/requests/pending-level1`
+**Description**: Get requests pending Team Lead approval
+
+**Access**: TEAM_LEAD or above
+
+---
+
+### `GET /leave/requests/pending-final`
+**Description**: Get requests pending Manager approval
+
+**Access**: MANAGER or above
+
+---
+
+### `POST /leave/requests/{request_id}/approve-level1`
+**Description**: Team Lead approves leave (Level 1 approval)
+
+**Access**: TEAM_LEAD or above
+
+**Request Body**:
+```json
+{
+  "action": "approve",  // "approve" or "reject"
+  "notes": "Approved by team lead",
+  "rejection_reason": "Not enough coverage"  // Required if reject
+}
+```
+
+**Response**: Updated leave request
+
+**Business Logic**:
+- Changes status from "pending_level1" to "approved_level1"
+- For single-day leave, may auto-approve to "approved_final"
+
+---
+
+### `POST /leave/requests/{request_id}/approve-final`
+**Description**: Manager final approval (Level 2)
+
+**Access**: MANAGER or above
+
+**Request Body**: Same as level1
+
+**Business Logic**:
+- Changes status to "approved_final"
+- Deducts from user's leave balance
+- Can only approve if Level 1 is already approved
+
+---
+
+### `POST /leave/requests/{request_id}/cancel`
+**Description**: Cancel own leave request
+
+**Access**: Request owner (before approval) or ADMIN
+
+**Response**: Leave request with status "cancelled"
+
+---
+
+### `GET /leave/balance`
+**Description**: Get current user's leave balance
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "user_code": "AB1234",
+    "casual_leave": 8.0,
+    "sick_leave": 10.0,
+    "privilege_leave": 15.0,
+    "total_available": 33.0
+  }
+}
+```
+
+---
+
+### `GET /leave/balance/{user_id}`
+**Description**: Get specific user's leave balance
+
+**Access**: ADMIN or above
+
+---
+
+## 5. Parking Endpoints
+
+### `GET /parking/slots`
+**Description**: List all parking slots
+
+**Access**: Parking Manager or above
+
+**Query Parameters**:
+- `page`, `page_size`
+- `parking_type` (optional): two_wheeler | four_wheeler | handicapped | visitor
+- `status` (optional): available | occupied
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "slot_code": "P-2W-001",
+      "slot_label": "Bike Slot 1",
+      "parking_type": "two_wheeler",
+      "status": "available",
+      "zone": "Zone A",
+      "is_active": true,
+      "created_by_code": "AD0001"
+    }
+  ],
+  "total": 50,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+---
+
+### `POST /parking/slots`
+**Description**: Create a parking slot
+
+**Access**: Parking Manager only
+
+**Request Body**:
+```json
+{
+  "slot_label": "Bike Slot 15",
+  "parking_type": "two_wheeler",
+  "zone": "Zone B",
+  "notes": "Near main entrance"
+}
+```
+
+**Response**: Created parking slot
+
+**Note**: `slot_code` is auto-generated (e.g., P-2W-015)
+
+---
+
+### `PUT /parking/slots/{slot_id}`
+**Description**: Update parking slot
+
+**Access**: Parking Manager only
+
+---
+
+### `DELETE /parking/slots/{slot_id}`
+**Description**: Delete parking slot
+
+**Access**: Parking Manager only
+
+---
+
+### `POST /parking/allocate`
+**Description**: Allocate parking slot to a user
+
+**Access**: Parking Manager only
+
+**Request Body**:
+```json
+{
+  "user_id": "uuid",
+  "slot_id": "uuid",
+  "valid_from": "2026-02-11",  // Optional
+  "valid_until": "2026-03-11",  // Optional - for temporary allocation
+  "notes": "Permanent allocation"
+}
+```
+
+**Response**: Allocation record
+
+---
+
+### `GET /parking/my-allocation`
+**Description**: Get current user's parking allocation
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "allocation_id": "uuid",
+    "slot": {
+      "slot_code": "P-4W-005",
+      "slot_label": "Car Slot 5",
+      "parking_type": "four_wheeler",
+      "zone": "Zone A"
+    },
+    "valid_from": "2026-02-01",
+    "valid_until": null,
+    "is_active": true
+  }
+}
+```
+
+---
+
+### `POST /parking/entry`
+**Description**: Record parking entry
+
+**Request Body**:
+```json
+{
+  "allocation_id": "uuid",  // Optional if user has allocation
+  "vehicle_number": "ABC123",  // Optional, uses user's vehicle_number
+  "notes": "Visitor parking"
+}
+```
+
+**Response**: Entry record with entry_time
+
+---
+
+### `POST /parking/exit`
+**Description**: Record parking exit
+
+**Request Body**:
+```json
+{
+  "history_id": "uuid"  // The parking history entry
+}
+```
+
+**Response**: Updated history with exit_time and duration
+
+---
+
+### `GET /parking/history`
+**Description**: Get parking entry/exit history
+
+**Query Parameters**:
+- `page`, `page_size`
+- `user_id` (optional): Parking Manager only
+- `start_date`, `end_date`
+
+---
+
+## 6. Desk & Conference Room Endpoints
+
+### `GET /desks`
+**Description**: List all desks
+
+**Access**: Desk Manager or above
+
+**Query Parameters**:
+- `page`, `page_size`
+- `status` (optional): available | assigned
+- `zone` (optional)
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "desk_code": "D-001",
+      "desk_label": "Desk 1",
+      "status": "available",
+      "zone": "Zone A",
+      "has_monitor": true,
+      "has_docking_station": true,
+      "is_active": true
+    }
+  ]
+}
+```
+
+---
+
+### `POST /desks`
+**Description**: Create a desk
+
+**Access**: Desk Manager only
+
+**Request Body**:
+```json
+{
+  "desk_label": "Desk 25",
+  "zone": "Zone B",
+  "has_monitor": true,
+  "has_docking_station": false,
+  "notes": "Near window"
+}
+```
+
+---
+
+### `GET /desks/rooms`
+**Description**: List all conference rooms
+
+**Response**: Similar to desks, includes `capacity` field
+
+---
+
+### `POST /desks/rooms`
+**Description**: Create conference room
+
+**Request Body**:
+```json
+{
+  "room_label": "Meeting Room A",
+  "capacity": 10,
+  "zone": "Zone A",
+  "notes": "Projector available"
+}
+```
+
+---
+
+### `GET /desks/bookings`
+**Description**: List desk bookings
+
+**Query Parameters**:
+- `page`, `page_size`
+- `user_id` (optional)
+- `desk_id` (optional)
+- `booking_date` (optional)
+- `start_date`, `end_date`
+
+---
+
+### `POST /desks/bookings`
+**Description**: Book a desk
+
+**Request Body**:
+```json
+{
+  "desk_id": "uuid",
+  "booking_date": "2026-02-15",
+  "start_time": "09:00:00",
+  "end_time": "17:00:00",
+  "purpose": "Project work"
+}
+```
+
+**Validation**:
+- Desk must be available
+- Cannot overlap with existing bookings
+- Cannot book past dates
+
+---
+
+### `GET /desks/bookings/my`
+**Description**: Get current user's desk bookings
+
+---
+
+### `DELETE /desks/bookings/{booking_id}`
+**Description**: Cancel desk booking
+
+**Access**: Booking owner or Desk Manager
+
+---
+
+### `GET /desks/rooms/bookings`
+**Description**: List conference room bookings
+
+---
+
+### `POST /desks/rooms/bookings`
+**Description**: Book a conference room
+
+**Request Body**: Same as desk booking with `room_id`
+
+---
+
+## 7. Cafeteria & Food Ordering Endpoints
+
+### `GET /cafeteria/tables`
+**Description**: List cafeteria tables
+
+**Access**: Cafeteria Manager or above
+
+---
+
+### `POST /cafeteria/tables`
+**Description**: Create cafeteria table
+
+**Access**: Cafeteria Manager only
+
+**Request Body**:
+```json
+{
+  "table_label": "Table 5",
+  "capacity": 4,
+  "zone": "Zone A",
+  "notes": "Window side"
+}
+```
+
+---
+
+### `GET /cafeteria/bookings`
+**Description**: List table bookings
+
+---
+
+### `POST /cafeteria/bookings`
+**Description**: Book a cafeteria table
+
+**Request Body**:
+```json
+{
+  "table_id": "uuid",
+  "booking_date": "2026-02-15",
+  "start_time": "12:00:00",
+  "end_time": "13:00:00"
+}
+```
+
+---
+
+### `GET /food-orders/items`
+**Description**: List available food items
+
+**Query Parameters**:
+- `page`, `page_size`
+- `category` (optional): breakfast | lunch | snacks | beverages
+- `is_available` (optional): true/false
+- `search` (optional): Text search in name/description
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "name": "Chicken Biryani",
+      "description": "Aromatic rice with chicken",
+      "category": "lunch",
+      "price": 120.00,
+      "is_vegetarian": false,
+      "is_available": true,
+      "dietary_info": ["non-veg", "spicy"]
+    }
+  ]
+}
+```
+
+---
+
+### `POST /food-orders/items`
+**Description**: Create food item
+
+**Access**: Cafeteria Manager only
+
+**Request Body**:
+```json
+{
+  "name": "Paneer Tikka",
+  "description": "Grilled cottage cheese",
+  "category": "snacks",
+  "price": 80.00,
+  "is_vegetarian": true,
+  "is_available": true,
+  "ingredients": ["paneer", "spices", "yogurt"],
+  "dietary_info": ["vegetarian"]
+}
+```
+
+---
+
+### `PUT /food-orders/items/{item_id}`
+**Description**: Update food item
+
+**Access**: Cafeteria Manager only
+
+---
+
+### `POST /food-orders/orders`
+**Description**: Place a food order
+
+**Request Body**:
+```json
+{
+  "order_items": [
+    {
+      "item_id": "uuid",
+      "quantity": 2,
+      "special_instructions": "Less spicy"
+    },
+    {
+      "item_id": "uuid",
+      "quantity": 1
+    }
+  ],
+  "delivery_time": "13:00:00",  // Optional
+  "notes": "Office cabin 305"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "order_number": "ORD-20260211-001",
+    "user_code": "AB1234",
+    "status": "pending",  // pending | confirmed | preparing | ready | delivered | cancelled
+    "total_amount": 320.00,
+    "items": [
+      {
+        "item_name": "Chicken Biryani",
+        "quantity": 2,
+        "price": 120.00,
+        "subtotal": 240.00
+      }
+    ],
+    "order_date": "2026-02-11",
+    "delivery_time": "13:00:00",
+    "created_at": "2026-02-11T11:00:00Z"
+  },
+  "message": "Order placed successfully"
+}
+```
+
+---
+
+### `GET /food-orders/orders`
+**Description**: List food orders
+
+**Query Parameters**:
+- `page`, `page_size`
+- `user_id` (optional): Cafeteria Manager only
+- `status` (optional)
+- `order_date` (optional)
+
+---
+
+### `GET /food-orders/orders/my`
+**Description**: Get current user's orders
+
+---
+
+### `PUT /food-orders/orders/{order_id}/status`
+**Description**: Update order status
+
+**Access**: Cafeteria Manager only
+
+**Request Body**:
+```json
+{
+  "status": "preparing"  // pending | confirmed | preparing | ready | delivered | cancelled
+}
+```
+
+---
+
+### `DELETE /food-orders/orders/{order_id}`
+**Description**: Cancel order
+
+**Access**: Order owner (if pending) or Cafeteria Manager
+
+---
+
+## 8. IT Asset Management Endpoints
+
+### `GET /it-assets`
+**Description**: List IT assets
+
+**Access**: IT Manager or above
+
+**Query Parameters**:
+- `page`, `page_size`
+- `asset_type` (optional): laptop | monitor | keyboard | mouse | headphones
+- `status` (optional): available | assigned | under_maintenance | retired
+- `assigned_to` (optional): User ID filter
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "asset_code": "LAP-001",
+      "asset_name": "Dell Latitude 5520",
+      "asset_type": "laptop",
+      "status": "assigned",
+      "serial_number": "DL12345",
+      "purchase_date": "2025-06-15",
+      "warranty_until": "2028-06-15",
+      "assigned_to": {
+        "user_code": "AB1234",
+        "name": "John Doe"
+      },
+      "specifications": {
+        "processor": "Intel i7",
+        "ram": "16GB",
+        "storage": "512GB SSD"
+      }
+    }
+  ]
+}
+```
+
+---
+
+### `POST /it-assets`
+**Description**: Create IT asset
+
+**Access**: IT Manager only
+
+**Request Body**:
+```json
+{
+  "asset_name": "Dell Monitor 27\"",
+  "asset_type": "monitor",
+  "manufacturer": "Dell",
+  "model": "P2722H",
+  "serial_number": "MON12345",
+  "purchase_date": "2026-01-15",
+  "purchase_price": 25000.00,
+  "warranty_until": "2029-01-15",
+  "specifications": {
+    "size": "27 inches",
+    "resolution": "1920x1080"
+  },
+  "notes": "For design team"
+}
+```
+
+**Note**: `asset_code` is auto-generated (e.g., MON-001)
+
+---
+
+### `PUT /it-assets/{asset_id}`
+**Description**: Update IT asset
+
+**Access**: IT Manager only
+
+---
+
+### `DELETE /it-assets/{asset_id}`
+**Description**: Delete IT asset
+
+**Access**: IT Manager only
+
+---
+
+### `POST /it-assets/{asset_id}/assign`
+**Description**: Assign asset to a user
+
+**Access**: IT Manager only
+
+**Request Body**:
+```json
+{
+  "user_id": "uuid",
+  "notes": "Laptop for development work"
+}
+```
+
+**Response**: Assignment record with assignment date
+
+**Business Logic**:
+- Asset status changes to "assigned"
+- Creates assignment history record
+- Previous assignment (if any) is marked as returned
+
+---
+
+### `POST /it-assets/{asset_id}/unassign`
+**Description**: Unassign asset from user
+
+**Access**: IT Manager only
+
+**Response**: Asset status changes to "available"
+
+---
+
+### `GET /it-assets/my`
+**Description**: Get assets assigned to current user
+
+**Response**: List of assigned assets
+
+---
+
+### `GET /it-assets/{asset_id}/history`
+**Description**: Get assignment history of an asset
+
+**Access**: IT Manager or asset owner
+
+---
+
+## 9. IT Request Endpoints
+
+### `POST /it-requests`
+**Description**: Create an IT request
+
+**Request Body**:
+```json
+{
+  "request_type": "hardware",  // hardware | software | access | support
+  "item_type": "laptop",  // For hardware: laptop | monitor | keyboard | mouse | headphones
+  "title": "Need new laptop",
+  "description": "Current laptop is slow, need upgrade for development work",
+  "priority": "high",  // low | medium | high | urgent
+  "required_by": "2026-02-20"  // Optional
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "request_number": "IT-20260211-001",
+    "user_code": "AB1234",
+    "request_type": "hardware",
+    "item_type": "laptop",
+    "title": "Need new laptop",
+    "description": "Current laptop is slow...",
+    "status": "pending",  // pending | approved | in_progress | completed | rejected | cancelled
+    "priority": "high",
+    "created_at": "2026-02-11T10:00:00Z"
+  },
+  "message": "IT request created successfully"
+}
+```
+
+---
+
+### `GET /it-requests`
+**Description**: List IT requests
+
+**Query Parameters**:
+- `page`, `page_size`
+- `user_id` (optional): IT Manager only
+- `status` (optional)
+- `request_type` (optional)
+- `priority` (optional)
+
+**Access**:
+- IT Manager: ALL requests
+- Others: Only own requests
+
+---
+
+### `GET /it-requests/my`
+**Description**: Get current user's IT requests
+
+---
+
+### `GET /it-requests/pending`
+**Description**: Get requests pending approval
+
+**Access**: IT Manager only
+
+---
+
+### `POST /it-requests/{request_id}/approve`
+**Description**: Approve or reject IT request
+
+**Access**: IT Manager only
+
+**Request Body**:
+```json
+{
+  "action": "approve",  // "approve" or "reject"
+  "notes": "Approved, will assign laptop by Friday",
+  "assigned_to_id": "uuid",  // Optional: Assign to specific IT staff
+  "rejection_reason": "Not justified"  // Required if action is "reject"
+}
+```
+
+**Business Logic**:
+- Approved requests move to "approved" status
+- Can assign to IT staff for fulfillment
+- Rejected requests cannot be reopened
+
+---
+
+### `PUT /it-requests/{request_id}/status`
+**Description**: Update request status
+
+**Access**: IT Manager only
+
+**Request Body**:
+```json
+{
+  "status": "in_progress",  // approved | in_progress | completed
+  "notes": "Working on it"
+}
+```
+
+---
+
+### `POST /it-requests/{request_id}/complete`
+**Description**: Mark request as completed
+
+**Access**: IT Manager only
+
+**Request Body**:
+```json
+{
+  "resolution_notes": "Laptop assigned, asset code: LAP-015",
+  "assigned_asset_id": "uuid"  // Optional: Link to assigned asset
+}
+```
+
+---
+
+### `DELETE /it-requests/{request_id}`
+**Description**: Cancel own request
+
+**Access**: Request owner (if pending) or IT Manager
+
+---
+
+## 10. Project Management Endpoints
+
+### `POST /projects`
+**Description**: Create a project request
+
+**Access**: TEAM_LEAD only
+
+**Request Body**:
+```json
+{
+  "project_name": "Mobile App Development",
+  "description": "Develop iOS and Android apps for customer portal",
+  "start_date": "2026-03-01",
+  "end_date": "2026-08-31",
+  "estimated_budget": 5000000.00,
+  "team_size": 8,
+  "required_skills": ["React Native", "Node.js", "AWS"],
+  "business_justification": "Increase customer engagement by 40%"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "project_code": "PRJ-2026-001",
+    "project_name": "Mobile App Development",
+    "team_lead_code": "TL0001",
+    "status": "pending_approval",  // pending_approval | approved | in_progress | on_hold | completed | cancelled
+    "start_date": "2026-03-01",
+    "end_date": "2026-08-31",
+    "estimated_budget": 5000000.00,
+    "created_at": "2026-02-11T10:00:00Z"
+  },
+  "message": "Project request created successfully"
+}
+```
+
+---
+
+### `GET /projects`
+**Description**: List projects
+
+**Query Parameters**:
+- `page`, `page_size`
+- `team_lead_id` (optional): Filter by team lead (Admin only)
+- `status` (optional)
+- `start_date`, `end_date`: Filter by project dates
+
+**Access**:
+- ADMIN+: All projects
+- TEAM_LEAD: Own projects only
+
+---
+
+### `GET /projects/my`
+**Description**: Get current user's projects (for Team Leads)
+
+---
+
+### `GET /projects/pending`
+**Description**: Get projects pending approval
+
+**Access**: ADMIN or above
+
+---
+
+### `POST /projects/{project_id}/approve`
+**Description**: Approve or reject project request
+
+**Access**: ADMIN or above
+
+**Request Body**:
+```json
+{
+  "action": "approve",  // "approve" or "reject"
+  "notes": "Approved with budget cap of 4.5M",
+  "approved_budget": 4500000.00,  // Optional: Modify budget
+  "rejection_reason": "Insufficient ROI"  // Required if reject
+}
+```
+
+---
+
+### `PUT /projects/{project_id}/status`
+**Description**: Update project status
+
+**Access**: Project's Team Lead or ADMIN
+
+**Request Body**:
+```json
+{
+  "status": "in_progress",  // approved | in_progress | on_hold | completed | cancelled
+  "notes": "Kicked off project"
+}
+```
+
+---
+
+### `PUT /projects/{project_id}`
+**Description**: Update project details
+
+**Access**: Project's Team Lead (before approval) or ADMIN
+
+---
+
+### `GET /projects/{project_id}`
+**Description**: Get project details
+
+---
+
+## 11. Holiday Management Endpoints
+
+### `GET /holidays`
+**Description**: List company holidays
+
+**Query Parameters**:
+- `year` (optional): Filter by year
+- `is_mandatory` (optional): true/false
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "holiday_name": "Republic Day",
+      "holiday_date": "2026-01-26",
+      "is_mandatory": true,
+      "description": "National holiday",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### `POST /holidays`
+**Description**: Create a holiday
+
+**Access**: ADMIN or above
+
+**Request Body**:
+```json
+{
+  "holiday_name": "Diwali",
+  "holiday_date": "2026-10-24",
+  "is_mandatory": true,
+  "description": "Festival of lights"
+}
+```
+
+---
+
+### `PUT /holidays/{holiday_id}`
+**Description**: Update holiday
+
+**Access**: ADMIN or above
+
+---
+
+### `DELETE /holidays/{holiday_id}`
+**Description**: Delete holiday
+
+**Access**: ADMIN or above
+
+---
+
+## 12. Semantic Search Endpoints
+
+### `POST /search`
+**Description**: AI-powered semantic search for food items and IT assets
+
+**Request Body**:
+```json
+{
+  "query": "spicy vegetarian food",
+  "search_type": "food",  // "food" or "it_assets"
+  "limit": 10  // Optional, default: 10
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "results": [
+      {
+        "item": {
+          "id": "uuid",
+          "name": "Paneer Tikka",
+          "description": "Spicy grilled cottage cheese",
+          "category": "snacks",
+          "price": 80.00,
+          "is_vegetarian": true
+        },
+        "similarity_score": 0.87
+      }
+    ],
+    "query": "spicy vegetarian food",
+    "total_results": 5
+  }
+}
+```
+
+**How it works**:
+- Uses sentence transformer embeddings (all-MiniLM-L6-v2)
+- Searches by semantic meaning, not just keywords
+- Returns results ranked by similarity
+
+**Example queries**:
+- Food: "healthy breakfast", "non-veg spicy lunch", "quick snacks"
+- IT Assets: "high performance laptop", "external monitor", "gaming peripherals"
+
+---
 
 ## Testing
 
 ```bash
-# Run tests with coverage
-pytest --cov=app --cov-report=term-missing
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=app --cov-report=html
 
 # Run specific test file
-pytest app/tests/test_auth.py -v
+pytest tests/test_api_comprehensive.py -v
+
+# Run specific test function
+pytest tests/test_auth.py::test_login -v
 ```
 
-## API Endpoints Overview
+## Environment Variables
 
-### Authentication
-- `POST /api/v1/auth/login` - User login
-- `POST /api/v1/auth/refresh` - Refresh token
-- `POST /api/v1/auth/change-password` - Change password
-- `GET /api/v1/auth/me` - Current user info
+Create a `.env` file in the project root:
 
-### Users
-- `GET /api/v1/users` - List users
-- `POST /api/v1/users` - Create user
-- `GET /api/v1/users/{id}` - Get user
-- `PUT /api/v1/users/{id}` - Update user
-- `DELETE /api/v1/users/{id}` - Delete user
+```env
+# Database
+DATABASE_URL=postgresql+asyncpg://office_admin:office_password@localhost:5432/office_management
+DATABASE_URL_SYNC=postgresql://office_admin:office_password@localhost:5432/office_management
 
-### Buildings & Floor Plans
-- `GET/POST /api/v1/buildings` - Building CRUD
-- `GET/POST /api/v1/floor-plans` - Floor plan CRUD
-- `POST /api/v1/floor-plans/{id}/versions` - Create version
-- `POST /api/v1/floor-plans/{id}/clone` - Clone floor plan
+# Security
+SECRET_KEY=your-super-secret-key-change-in-production-minimum-32-chars
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+REFRESH_TOKEN_EXPIRE_DAYS=7
 
-### Parking
-- `GET/POST /api/v1/parking/allocations` - Parking CRUD
-- `POST /api/v1/parking/allocations/{id}/entry` - Record entry
-- `POST /api/v1/parking/allocations/{id}/exit` - Record exit
-- `GET /api/v1/parking/available/{floor_plan_id}` - Available slots
+# Application
+APP_NAME=Unified Office Management System
+DEBUG=True
+API_V1_PREFIX=/api/v1
 
-### Desk Booking
-- `GET/POST /api/v1/desks/bookings` - Booking CRUD
-- `GET /api/v1/desks/available/{floor_plan_id}` - Available desks
+# Company
+COMPANY_DOMAIN=company.com
 
-### Cafeteria
-- `GET/POST /api/v1/cafeteria/bookings` - Table bookings
-- `GET/POST /api/v1/food-orders/items` - Food items
-- `GET/POST /api/v1/food-orders/orders` - Food orders
+# Vector Search (Semantic Search)
+EMBEDDING_MODEL=all-MiniLM-L6-v2
+VECTOR_DIMENSION=384
+```
 
-### Attendance
-- `POST /api/v1/attendance/check-in` - Check in
-- `POST /api/v1/attendance/check-out` - Check out
-- `POST /api/v1/attendance/{id}/submit` - Submit for approval
-- `POST /api/v1/attendance/{id}/approve` - Approve/reject
+## Project Structure
 
-### Leave
-- `GET/POST /api/v1/leave/requests` - Leave requests
-- `POST /api/v1/leave/requests/{id}/approve-level1` - Team lead approval
-- `POST /api/v1/leave/requests/{id}/approve-final` - Manager approval
-- `GET /api/v1/leave/balance` - Leave balance
+```
+unified-office-management/
+├── app/
+│   ├── main.py                    # FastAPI application entry point
+│   ├── core/
+│   │   ├── config.py              # Settings and environment variables
+│   │   ├── database.py            # Database connection and session
+│   │   ├── security.py            # JWT and password hashing
+│   │   └── dependencies.py        # FastAPI dependencies and auth
+│   ├── api/v1/
+│   │   ├── router.py              # Main API router
+│   │   └── endpoints/             # API endpoint modules
+│   │       ├── auth.py            # Authentication endpoints
+│   │       ├── users.py           # User management
+│   │       ├── attendance.py      # Attendance tracking
+│   │       ├── leave.py           # Leave management
+│   │       ├── parking.py         # Parking management
+│   │       ├── desks.py           # Desk & conference rooms
+│   │       ├── cafeteria.py       # Cafeteria table bookings
+│   │       ├── food_orders.py     # Food ordering
+│   │       ├── it_assets.py       # IT asset management
+│   │       ├── it_requests.py     # IT support requests
+│   │       ├── projects.py        # Project management
+│   │       ├── holidays.py        # Holiday calendar
+│   │       └── search.py          # Semantic search
+│   ├── models/                    # SQLAlchemy ORM models
+│   │   ├── user.py
+│   │   ├── attendance.py
+│   │   ├── leave.py
+│   │   ├── parking.py
+│   │   ├── desk.py
+│   │   ├── cafeteria.py
+│   │   ├── food.py
+│   │   ├── it_asset.py
+│   │   ├── it_request.py
+│   │   ├── project.py
+│   │   ├── holiday.py
+│   │   ├── enums.py               # Enum definitions
+│   │   └── base.py                # Base model classes
+│   ├── schemas/                   # Pydantic schemas (request/response)
+│   │   ├── auth.py
+│   │   ├── user.py
+│   │   ├── attendance.py
+│   │   └── ...
+│   ├── services/                  # Business logic layer
+│   │   ├── auth_service.py
+│   │   ├── user_service.py
+│   │   ├── attendance_service.py
+│   │   ├── embedding_service.py   # AI embeddings for search
+│   │   └── ...
+│   ├── middleware/
+│   │   └── response_middleware.py # Request logging and formatting
+│   └── utils/                     # Utility functions
+│       ├── response.py            # Response formatters
+│       └── validators.py          # Custom validators
+├── alembic/                       # Database migrations
+│   ├── versions/                  # Migration files
+│   └── env.py
+├── scripts/
+│   ├── seed_hierarchy.py          # Seed initial users
+│   └── seed_data.py               # Seed sample data
+├── tests/                         # Test suite
+│   ├── conftest.py                # Pytest fixtures
+│   ├── test_auth.py
+│   ├── test_api_comprehensive.py
+│   └── test_edge_cases.py
+├── docker-compose.yml
+├── Dockerfile
+├── requirements.txt
+├── alembic.ini
+├── pytest.ini
+└── README.md
+```
 
-### IT Assets & Requests
-- `GET/POST /api/v1/it-assets` - Asset CRUD
-- `POST /api/v1/it-assets/{id}/assign` - Assign asset
-- `GET/POST /api/v1/it-requests` - IT requests
-- `POST /api/v1/it-requests/{id}/approve` - Approve request
+## Interactive API Documentation
 
-### Projects
-- `GET/POST /api/v1/projects` - Project CRUD
-- `POST /api/v1/projects/{id}/submit` - Submit for approval
-- `POST /api/v1/projects/{id}/approve` - Approve/reject
+Once the server is running, access:
 
-### Search
-- `POST /api/v1/search` - Semantic search
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
 
 ## License
 
 MIT License
+
+## Support
+
+For issues and questions, please create an issue in the repository.

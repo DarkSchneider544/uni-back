@@ -46,7 +46,8 @@ class Attendance(Base, TimestampMixin):
     # For employees: approved by team_lead
     # For team_leads: approved by manager
     # For managers: approved by super_admin
-    approved_by_code = Column(String(10), ForeignKey("users.user_code"), nullable=True)
+    approver_code = Column(String(10), ForeignKey("users.user_code"), nullable=True)  # Designated approver
+    approved_by_code = Column(String(10), ForeignKey("users.user_code"), nullable=True)  # Who actually approved
     approval_notes = Column(Text, nullable=True)
     approved_at = Column(DateTime(timezone=True), nullable=True)
     rejection_reason = Column(Text, nullable=True)
@@ -57,6 +58,7 @@ class Attendance(Base, TimestampMixin):
     
     # Relationships
     user = relationship("User", foreign_keys=[user_code], primaryjoin="Attendance.user_code == User.user_code")
+    approver = relationship("User", foreign_keys=[approver_code], primaryjoin="Attendance.approver_code == User.user_code")
     approved_by = relationship("User", foreign_keys=[approved_by_code], primaryjoin="Attendance.approved_by_code == User.user_code")
     entries = relationship("AttendanceEntry", back_populates="attendance", order_by="AttendanceEntry.check_in")
     

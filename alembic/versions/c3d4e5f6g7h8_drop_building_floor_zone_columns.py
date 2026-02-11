@@ -28,48 +28,34 @@ def upgrade() -> None:
     These location fields are no longer needed.
     """
     
-    # Drop indexes first (if they exist)
-    # Note: Using try/except to handle cases where indexes may not exist
+    # Drop indexes first (if they exist) using raw SQL with IF EXISTS
+    conn = op.get_bind()
     
-    # Desks table
-    try:
-        op.drop_index('ix_desks_building_floor', table_name='desks')
-    except Exception:
-        pass
+    # Drop indexes with IF EXISTS
+    conn.execute(sa.text('DROP INDEX IF EXISTS ix_desks_building_floor'))
+    conn.execute(sa.text('DROP INDEX IF EXISTS ix_conference_rooms_building_floor'))
+    conn.execute(sa.text('DROP INDEX IF EXISTS ix_parking_slots_building_floor'))
+    conn.execute(sa.text('DROP INDEX IF EXISTS ix_cafeteria_tables_building_floor'))
     
-    op.drop_column('desks', 'building')
-    op.drop_column('desks', 'floor')
-    op.drop_column('desks', 'zone')
+    # Desks table - use raw SQL with IF EXISTS
+    conn.execute(sa.text('ALTER TABLE desks DROP COLUMN IF EXISTS building'))
+    conn.execute(sa.text('ALTER TABLE desks DROP COLUMN IF EXISTS floor'))
+    conn.execute(sa.text('ALTER TABLE desks DROP COLUMN IF EXISTS zone'))
     
     # Conference rooms table
-    try:
-        op.drop_index('ix_conference_rooms_building_floor', table_name='conference_rooms')
-    except Exception:
-        pass
-    
-    op.drop_column('conference_rooms', 'building')
-    op.drop_column('conference_rooms', 'floor')
-    op.drop_column('conference_rooms', 'zone')
+    conn.execute(sa.text('ALTER TABLE conference_rooms DROP COLUMN IF EXISTS building'))
+    conn.execute(sa.text('ALTER TABLE conference_rooms DROP COLUMN IF EXISTS floor'))
+    conn.execute(sa.text('ALTER TABLE conference_rooms DROP COLUMN IF EXISTS zone'))
     
     # Parking slots table
-    try:
-        op.drop_index('ix_parking_slots_building_floor', table_name='parking_slots')
-    except Exception:
-        pass
-    
-    op.drop_column('parking_slots', 'building')
-    op.drop_column('parking_slots', 'floor')
-    op.drop_column('parking_slots', 'zone')
+    conn.execute(sa.text('ALTER TABLE parking_slots DROP COLUMN IF EXISTS building'))
+    conn.execute(sa.text('ALTER TABLE parking_slots DROP COLUMN IF EXISTS floor'))
+    conn.execute(sa.text('ALTER TABLE parking_slots DROP COLUMN IF EXISTS zone'))
     
     # Cafeteria tables table
-    try:
-        op.drop_index('ix_cafeteria_tables_building_floor', table_name='cafeteria_tables')
-    except Exception:
-        pass
-    
-    op.drop_column('cafeteria_tables', 'building')
-    op.drop_column('cafeteria_tables', 'floor')
-    op.drop_column('cafeteria_tables', 'zone')
+    conn.execute(sa.text('ALTER TABLE cafeteria_tables DROP COLUMN IF EXISTS building'))
+    conn.execute(sa.text('ALTER TABLE cafeteria_tables DROP COLUMN IF EXISTS floor'))
+    conn.execute(sa.text('ALTER TABLE cafeteria_tables DROP COLUMN IF EXISTS zone'))
 
 
 def downgrade() -> None:
