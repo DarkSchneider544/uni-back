@@ -8,6 +8,7 @@ from ....core.database import get_db
 from ....core.dependencies import get_current_active_user, require_team_lead_or_above, require_manager_or_above
 from ....models.user import User
 from ....models.enums import LeaveType, LeaveStatus
+from ....models.leave import LeaveRequest
 from ....schemas.leave import (
     LeaveRequestCreate, LeaveRequestResponse, LeaveBalanceResponse, LeaveApproval
 )
@@ -16,6 +17,40 @@ from ....services.leave_service import LeaveService
 from ....utils.response import create_response, create_paginated_response
 
 router = APIRouter()
+
+
+def build_leave_request_response(leave_request: LeaveRequest) -> dict:
+    """Build response dict from LeaveRequest model to avoid lazy-loading issues."""
+    return {
+        "id": leave_request.id,
+        "user_code": leave_request.user_code,
+        "leave_type": leave_request.leave_type.code if leave_request.leave_type else None,
+        "leave_type_name": leave_request.leave_type.name if leave_request.leave_type else None,
+        "start_date": leave_request.start_date,
+        "end_date": leave_request.end_date,
+        "total_days": leave_request.total_days,
+        "is_half_day": leave_request.is_half_day,
+        "half_day_type": leave_request.half_day_type,
+        "reason": leave_request.reason,
+        "status": leave_request.status,
+        "level1_approver_code": leave_request.level1_approver_code,
+        "level1_approver_name": None,  # Could be fetched if needed
+        "level1_approved_at": leave_request.level1_approved_at,
+        "level1_notes": leave_request.level1_notes,
+        "final_approver_code": leave_request.final_approver_code,
+        "final_approver_name": None,  # Could be fetched if needed
+        "final_approved_at": leave_request.final_approved_at,
+        "final_approval_notes": leave_request.final_approval_notes,
+        "rejection_reason": leave_request.rejection_reason,
+        "rejected_by_code": leave_request.rejected_by_code,
+        "rejected_at": leave_request.rejected_at,
+        "cancelled_at": leave_request.cancelled_at,
+        "cancellation_reason": leave_request.cancellation_reason,
+        "emergency_contact": leave_request.emergency_contact,
+        "emergency_phone": leave_request.emergency_phone,
+        "created_at": leave_request.created_at,
+        "updated_at": leave_request.updated_at,
+    }
 
 
 @router.post("/requests", response_model=APIResponse[LeaveRequestResponse])
@@ -41,7 +76,7 @@ async def create_leave_request(
         )
     
     return create_response(
-        data=LeaveRequestResponse.model_validate(leave_request),
+        data=build_leave_request_response(leave_request),
         message="Leave request created successfully"
     )
 
@@ -73,7 +108,7 @@ async def list_leave_requests(
     )
     
     return create_paginated_response(
-        data=[LeaveRequestResponse.model_validate(r) for r in requests],
+        data=[build_leave_request_response(r) for r in requests],
         total=total,
         page=page,
         page_size=page_size,
@@ -98,7 +133,7 @@ async def get_leave_request(
         )
     
     return create_response(
-        data=LeaveRequestResponse.model_validate(leave_request),
+        data=build_leave_request_response(leave_request),
         message="Leave request retrieved successfully"
     )
 
@@ -134,7 +169,7 @@ async def approve_leave_level1(
         )
     
     return create_response(
-        data=LeaveRequestResponse.model_validate(leave_request),
+        data=build_leave_request_response(leave_request),
         message=f"Leave request {approval_data.action}d successfully"
     )
 
@@ -170,7 +205,7 @@ async def approve_leave_final(
         )
     
     return create_response(
-        data=LeaveRequestResponse.model_validate(leave_request),
+        data=build_leave_request_response(leave_request),
         message=f"Leave request {approval_data.action}d successfully"
     )
 
@@ -192,7 +227,7 @@ async def cancel_leave_request(
         )
     
     return create_response(
-        data=LeaveRequestResponse.model_validate(leave_request),
+        data=build_leave_request_response(leave_request),
         message="Leave request cancelled successfully"
     )
 

@@ -30,9 +30,11 @@ class LeaveService:
         self,
         request_id: UUID
     ) -> Optional[LeaveRequest]:
-        """Get leave request by ID."""
+        """Get leave request by ID with eager-loaded leave_type."""
         result = await self.db.execute(
-            select(LeaveRequest).where(LeaveRequest.id == request_id)
+            select(LeaveRequest)
+            .options(selectinload(LeaveRequest.leave_type))
+            .where(LeaveRequest.id == request_id)
         )
         return result.scalar_one_or_none()
     
@@ -72,9 +74,10 @@ class LeaveService:
         user_code: str,
         year: int
     ) -> List[LeaveBalance]:
-        """Get all leave balances for a user."""
+        """Get all leave balances for a user with eager-loaded leave_type."""
         result = await self.db.execute(
             select(LeaveBalance)
+            .options(selectinload(LeaveBalance.leave_type))
             .where(
                 LeaveBalance.user_code == user_code.upper(),
                 LeaveBalance.year == year
@@ -249,7 +252,14 @@ class LeaveService:
             balance.pending_days = balance.pending_days + total_days
         
         await self.db.commit()
-        await self.db.refresh(leave_request)
+        
+        # Re-query with eager-loaded leave_type to avoid lazy-loading issues
+        result = await self.db.execute(
+            select(LeaveRequest)
+            .options(selectinload(LeaveRequest.leave_type))
+            .where(LeaveRequest.id == leave_request.id)
+        )
+        leave_request = result.scalar_one()
         
         return leave_request, None
     
@@ -279,12 +289,18 @@ class LeaveService:
                 return None, "You are not authorized to approve this request at Level 1"
         
         leave_request.status = LeaveStatus.APPROVED_BY_TEAM_LEAD
-        leave_request.level1_approved_by_code = approver.user_code
         leave_request.level1_approved_at = datetime.now(timezone.utc)
         leave_request.level1_notes = notes
         
         await self.db.commit()
-        await self.db.refresh(leave_request)
+        
+        # Re-query with eager-loaded leave_type
+        result = await self.db.execute(
+            select(LeaveRequest)
+            .options(selectinload(LeaveRequest.leave_type))
+            .where(LeaveRequest.id == leave_request.id)
+        )
+        leave_request = result.scalar_one()
         
         return leave_request, None
     
@@ -327,9 +343,8 @@ class LeaveService:
                 return None, "You are not authorized to give final approval"
         
         leave_request.status = LeaveStatus.APPROVED
-        leave_request.final_approved_by_code = approver.user_code
         leave_request.final_approved_at = datetime.now(timezone.utc)
-        leave_request.final_notes = notes
+        leave_request.final_approval_notes = notes
         
         # Update balance - move from pending to used
         result = await self.db.execute(
@@ -348,7 +363,14 @@ class LeaveService:
                 balance.used_days = balance.used_days + leave_request.total_days
         
         await self.db.commit()
-        await self.db.refresh(leave_request)
+        
+        # Re-query with eager-loaded leave_type
+        result = await self.db.execute(
+            select(LeaveRequest)
+            .options(selectinload(LeaveRequest.leave_type))
+            .where(LeaveRequest.id == leave_request.id)
+        )
+        leave_request = result.scalar_one()
         
         return leave_request, None
     
@@ -399,7 +421,14 @@ class LeaveService:
                 balance.pending_days = balance.pending_days - leave_request.total_days
         
         await self.db.commit()
-        await self.db.refresh(leave_request)
+        
+        # Re-query with eager-loaded leave_type
+        result = await self.db.execute(
+            select(LeaveRequest)
+            .options(selectinload(LeaveRequest.leave_type))
+            .where(LeaveRequest.id == leave_request.id)
+        )
+        leave_request = result.scalar_one()
         
         return leave_request, None
     
@@ -440,7 +469,14 @@ class LeaveService:
                 balance.pending_days = balance.pending_days - leave_request.total_days
         
         await self.db.commit()
-        await self.db.refresh(leave_request)
+        
+        # Re-query with eager-loaded leave_type
+        result = await self.db.execute(
+            select(LeaveRequest)
+            .options(selectinload(LeaveRequest.leave_type))
+            .where(LeaveRequest.id == leave_request.id)
+        )
+        leave_request = result.scalar_one()
         
         return leave_request, None
     
@@ -481,6 +517,7 @@ class LeaveService:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
         
+        query = query.options(selectinload(LeaveRequest.leave_type))
         query = query.offset((page - 1) * page_size).limit(page_size)
         query = query.order_by(LeaveRequest.created_at.desc())
         
@@ -547,7 +584,8 @@ class LeaveService:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
         
-        query = base_query.offset((page - 1) * page_size).limit(page_size)
+        query = base_query.options(selectinload(LeaveRequest.leave_type))
+        query = query.offset((page - 1) * page_size).limit(page_size)
         query = query.order_by(LeaveRequest.created_at.desc())
         
         result = await self.db.execute(query)
