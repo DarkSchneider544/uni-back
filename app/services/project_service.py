@@ -123,11 +123,11 @@ class ProjectService:
         if not project:
             return None, "Project not found"
         
-        if str(project.requested_by_id) != str(user.id):
+        if str(project.requested_by_code) != str(user.user_code):
             if user.role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
                 return None, "Cannot update another user's project"
         
-        if project.status not in [ProjectStatus.DRAFT, ProjectStatus.PENDING]:
+        if project.status not in [ProjectStatus.DRAFT, ProjectStatus.PENDING_APPROVAL]:
             return None, "Can only update draft or pending projects"
         
         update_data = project_data.model_dump(exclude_unset=True)
@@ -153,13 +153,13 @@ class ProjectService:
         if not project:
             return None, "Project not found"
         
-        if str(project.requested_by_id) != str(user.id):
+        if str(project.requested_by_code) != str(user.user_code):
             return None, "Only the project creator can submit"
         
         if project.status != ProjectStatus.DRAFT:
             return None, "Only draft projects can be submitted"
         
-        project.status = ProjectStatus.PENDING
+        project.status = ProjectStatus.PENDING_APPROVAL
         
         await self.db.commit()
         await self.db.refresh(project)
@@ -177,7 +177,7 @@ class ProjectService:
         if not project:
             return None, "Project not found"
         
-        if project.status != ProjectStatus.PENDING:
+        if project.status != ProjectStatus.PENDING_APPROVAL:
             return None, "Only pending projects can be approved"
         
         if approver.role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
@@ -204,7 +204,7 @@ class ProjectService:
         if not project:
             return None, "Project not found"
         
-        if project.status != ProjectStatus.PENDING:
+        if project.status != ProjectStatus.PENDING_APPROVAL:
             return None, "Only pending projects can be rejected"
         
         project.status = ProjectStatus.REJECTED

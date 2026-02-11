@@ -25,6 +25,7 @@ from app.models.parking import ParkingSlot, ParkingAllocation
 from app.models.enums import ManagerType, UserRole, ParkingType, VehicleType, ParkingSlotStatus
 from app.services.parking_service import ParkingService
 from app.utils.response import create_response
+from app.schemas.base import APIResponse
 
 router = APIRouter()
 
@@ -51,7 +52,7 @@ async def require_parking_admin(
 
 # ============== USER OPERATIONS (Everyone Can Use) ==============
 
-@router.post("/allocate", response_model=dict)
+@router.post("/allocate", response_model=APIResponse[dict])
 async def allocate_parking(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -126,7 +127,7 @@ async def allocate_parking(
     )
 
 
-@router.post("/release", response_model=dict)
+@router.post("/release", response_model=APIResponse[dict])
 async def release_parking(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -179,7 +180,7 @@ async def release_parking(
     )
 
 
-@router.get("/my-slot", response_model=dict)
+@router.get("/my-slot", response_model=APIResponse[dict])
 async def get_my_parking(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -225,7 +226,7 @@ async def get_my_parking(
 
 # ============== ADMIN OPERATIONS (Parking Manager, Admin, Super Admin) ==============
 
-@router.get("/slots/summary", response_model=dict)
+@router.get("/slots/summary", response_model=APIResponse[dict])
 async def get_slot_summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -241,7 +242,7 @@ async def get_slot_summary(
     )
 
 
-@router.get("/slots/list", response_model=dict)
+@router.get("/slots/list", response_model=APIResponse[dict])
 async def list_slots(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
@@ -317,7 +318,7 @@ async def list_slots(
     )
 
 
-@router.post("/slots/create", response_model=dict)
+@router.post("/slots/create", response_model=APIResponse[dict])
 async def create_slot(
     slot_code: str = Query(..., description="Unique slot code (e.g., A-01)"),
     db: AsyncSession = Depends(get_db),
@@ -360,7 +361,7 @@ async def create_slot(
     )
 
 
-@router.delete("/slots/delete/{slot_code}", response_model=dict)
+@router.delete("/slots/delete/{slot_code}", response_model=APIResponse[dict])
 async def delete_slot(
     slot_code: str,
     db: AsyncSession = Depends(get_db),
@@ -395,7 +396,7 @@ async def delete_slot(
     )
 
 
-@router.post("/slots/change-status/{slot_code}", response_model=dict)
+@router.post("/slots/change-status/{slot_code}", response_model=APIResponse[dict])
 async def change_slot_status(
     slot_code: str,
     new_status: str = Query(..., description="AVAILABLE, OCCUPIED, or DISABLED"),
@@ -451,7 +452,7 @@ async def change_slot_status(
     )
 
 
-@router.post("/slots/assign-visitor", response_model=dict)
+@router.post("/slots/assign-visitor", response_model=APIResponse[dict])
 async def assign_visitor(
     visitor_name: str = Query(..., description="Visitor's name"),
     vehicle_number: str = Query(..., description="Vehicle number"),
@@ -518,7 +519,7 @@ async def assign_visitor(
 
 # ============== PARKING LOGS (Admin Only) ==============
 
-@router.get("/logs/list", response_model=dict)
+@router.get("/logs/list", response_model=APIResponse[dict])
 async def list_parking_logs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),

@@ -5,6 +5,8 @@ from uuid import UUID
 from datetime import datetime, timezone
 import uuid as uuid_lib
 
+from sqlalchemy.orm import selectinload
+
 from ..models.it_request import ITRequest
 from ..models.user import User
 from ..models.enums import ITRequestType, ITRequestStatus, UserRole
@@ -16,6 +18,20 @@ class ITRequestService:
     
     def __init__(self, db: AsyncSession):
         self.db = db
+    
+    async def _reload_with_relationships(self, request_id: UUID) -> Optional[ITRequest]:
+        """Reload IT request with all relationships."""
+        result = await self.db.execute(
+            select(ITRequest)
+            .where(ITRequest.id == request_id)
+            .options(
+                selectinload(ITRequest.user),
+                selectinload(ITRequest.asset),
+                selectinload(ITRequest.approved_by),
+                selectinload(ITRequest.assigned_to)
+            )
+        )
+        return result.scalar_one_or_none()
     
     async def get_request_by_id(
         self,
@@ -133,7 +149,9 @@ class ITRequestService:
             it_request.assigned_at = datetime.now(timezone.utc)
         
         await self.db.commit()
-        await self.db.refresh(it_request)
+        
+        # Reload with relationships
+        it_request = await self._reload_with_relationships(request_id)
         
         return it_request, None
     
@@ -157,7 +175,9 @@ class ITRequestService:
         it_request.rejection_reason = reason
         
         await self.db.commit()
-        await self.db.refresh(it_request)
+        
+        # Reload with relationships
+        it_request = await self._reload_with_relationships(request_id)
         
         return it_request, None
     
@@ -180,7 +200,9 @@ class ITRequestService:
             it_request.assigned_at = datetime.now(timezone.utc)
         
         await self.db.commit()
-        await self.db.refresh(it_request)
+        
+        # Reload with relationships
+        it_request = await self._reload_with_relationships(request_id)
         
         return it_request, None
     
@@ -203,7 +225,9 @@ class ITRequestService:
         it_request.completion_notes = notes
         
         await self.db.commit()
-        await self.db.refresh(it_request)
+        
+        # Reload with relationships
+        it_request = await self._reload_with_relationships(request_id)
         
         return it_request, None
     

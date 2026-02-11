@@ -22,6 +22,36 @@ from ....utils.response import create_response, create_paginated_response
 router = APIRouter()
 
 
+def build_it_request_response(it_request) -> dict:
+    """Build IT request response with user names from relationships."""
+    return {
+        "id": it_request.id,
+        "request_number": it_request.request_number,
+        "user_code": it_request.user_code,
+        "user_name": f"{it_request.user.first_name} {it_request.user.last_name}" if it_request.user else "",
+        "request_type": it_request.request_type,
+        "related_asset_id": it_request.asset_id,
+        "related_asset_code": it_request.asset.asset_code if it_request.asset else None,
+        "title": it_request.title,
+        "description": it_request.description,
+        "priority": it_request.priority,
+        "status": it_request.status,
+        "approved_by_code": it_request.approved_by_code,
+        "approved_by_name": f"{it_request.approved_by.first_name} {it_request.approved_by.last_name}" if it_request.approved_by else None,
+        "approved_at": it_request.approved_at,
+        "approval_notes": it_request.approval_notes,
+        "assigned_to_code": it_request.assigned_to_code,
+        "assigned_to_name": f"{it_request.assigned_to.first_name} {it_request.assigned_to.last_name}" if it_request.assigned_to else None,
+        "assigned_at": it_request.assigned_at,
+        "started_at": it_request.in_progress_at,
+        "completed_at": it_request.completed_at,
+        "resolution_notes": it_request.resolution_summary,
+        "rejection_reason": it_request.rejection_reason,
+        "created_at": it_request.created_at,
+        "updated_at": it_request.updated_at,
+    }
+
+
 # ========== MANAGEMENT APIs - IT Support Manager Only ==========
 # These APIs are for MANAGING IT requests (approving, assigning, completing)
 # Only IT Support Manager, Admin, or Super Admin can access these
@@ -60,8 +90,9 @@ async def approve_it_request(
             detail=error
         )
     
+    response_data = build_it_request_response(it_request)
     return create_response(
-        data=ITRequestResponse.model_validate(it_request),
+        data=response_data,
         message=f"IT request {approval_data.action}d successfully"
     )
 
@@ -69,36 +100,6 @@ async def approve_it_request(
 # ========== USER APIs - All Authenticated Users ==========
 # These APIs are for USING IT request services (creating, viewing own requests)
 # All authenticated users can access these
-
-
-def build_it_request_response(it_request) -> dict:
-    """Build IT request response with user names from relationships."""
-    return {
-        "id": it_request.id,
-        "request_number": it_request.request_number,
-        "user_code": it_request.user_code,
-        "user_name": f"{it_request.user.first_name} {it_request.user.last_name}" if it_request.user else "",
-        "request_type": it_request.request_type,
-        "related_asset_id": it_request.asset_id,
-        "related_asset_code": it_request.asset.asset_code if it_request.asset else None,
-        "title": it_request.title,
-        "description": it_request.description,
-        "priority": it_request.priority,
-        "status": it_request.status,
-        "approved_by_code": it_request.approved_by_code,
-        "approved_by_name": f"{it_request.approved_by.first_name} {it_request.approved_by.last_name}" if it_request.approved_by else None,
-        "approved_at": it_request.approved_at,
-        "approval_notes": it_request.approval_notes,
-        "assigned_to_code": it_request.assigned_to_code,
-        "assigned_to_name": f"{it_request.assigned_to.first_name} {it_request.assigned_to.last_name}" if it_request.assigned_to else None,
-        "assigned_at": it_request.assigned_at,
-        "started_at": it_request.in_progress_at,
-        "completed_at": it_request.completed_at,
-        "resolution_notes": it_request.resolution_summary,
-        "rejection_reason": it_request.rejection_reason,
-        "created_at": it_request.created_at,
-        "updated_at": it_request.updated_at,
-    }
 
 
 @router.post("", response_model=APIResponse[ITRequestResponse])

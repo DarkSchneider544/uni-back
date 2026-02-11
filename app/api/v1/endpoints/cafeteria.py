@@ -25,6 +25,7 @@ from app.schemas.cafeteria import (
 )
 from app.services.cafeteria_service import CafeteriaService
 from app.utils.response import create_response
+from app.schemas.base import APIResponse
 
 router = APIRouter()
 
@@ -50,7 +51,7 @@ async def require_cafeteria_manager(
 
 # ============== Cafeteria Table Management (Manager Only) ==============
 
-@router.post("/tables", response_model=dict)
+@router.post("/tables", response_model=APIResponse[dict])
 async def create_cafeteria_table(
     table_data: CafeteriaTableCreate,
     db: AsyncSession = Depends(get_db),
@@ -70,7 +71,7 @@ async def create_cafeteria_table(
     )
 
 
-@router.get("/tables", response_model=dict)
+@router.get("/tables", response_model=APIResponse[dict])
 async def get_all_cafeteria_tables(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -93,7 +94,7 @@ async def get_all_cafeteria_tables(
     )
 
 
-@router.get("/tables/{table_id}", response_model=dict)
+@router.get("/tables/{table_id}", response_model=APIResponse[dict])
 async def get_cafeteria_table(
     table_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -113,7 +114,7 @@ async def get_cafeteria_table(
     )
 
 
-@router.put("/tables/{table_id}", response_model=dict)
+@router.put("/tables/{table_id}", response_model=APIResponse[dict])
 async def update_cafeteria_table(
     table_id: UUID,
     table_data: CafeteriaTableUpdate,
@@ -131,7 +132,7 @@ async def update_cafeteria_table(
     )
 
 
-@router.delete("/tables/{table_id}", response_model=dict)
+@router.delete("/tables/{table_id}", response_model=APIResponse[dict])
 async def delete_cafeteria_table(
     table_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -150,7 +151,7 @@ async def delete_cafeteria_table(
 
 # ============== Cafeteria Table Bookings (All Users) ==============
 
-@router.post("/bookings", response_model=dict)
+@router.post("/bookings", response_model=APIResponse[dict])
 async def create_cafeteria_booking(
     booking_data: CafeteriaBookingCreate,
     db: AsyncSession = Depends(get_db),
@@ -190,7 +191,7 @@ async def create_cafeteria_booking(
     )
 
 
-@router.get("/bookings", response_model=dict)
+@router.get("/bookings", response_model=APIResponse[dict])
 async def get_cafeteria_bookings(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -235,7 +236,7 @@ async def get_cafeteria_bookings(
     )
 
 
-@router.get("/bookings/my", response_model=dict)
+@router.get("/bookings/my", response_model=APIResponse[dict])
 async def get_my_cafeteria_bookings(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -275,7 +276,7 @@ async def get_my_cafeteria_bookings(
     )
 
 
-@router.put("/bookings/{booking_id}", response_model=dict)
+@router.put("/bookings/{booking_id}", response_model=APIResponse[dict])
 async def update_cafeteria_booking(
     booking_id: UUID,
     booking_data: CafeteriaBookingUpdate,
@@ -312,7 +313,7 @@ async def update_cafeteria_booking(
     )
 
 
-@router.delete("/bookings/{booking_id}", response_model=dict)
+@router.delete("/bookings/{booking_id}", response_model=APIResponse[dict])
 async def cancel_cafeteria_booking(
     booking_id: UUID,
     reason: Optional[str] = None,
@@ -332,7 +333,7 @@ async def cancel_cafeteria_booking(
 
 # ============== Cafeteria Stats ==============
 
-@router.get("/stats", response_model=dict)
+@router.get("/stats", response_model=APIResponse[dict])
 async def get_cafeteria_stats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
