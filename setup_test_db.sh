@@ -1,4 +1,4 @@
-#!/bin/bash
+a#!/bin/bash
 
 # Script to setup test database for running tests
 

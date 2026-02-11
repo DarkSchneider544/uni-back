@@ -1,53 +1,925 @@
-# Unified Office Management System
+# 🏢 Unified Office Management System
 
-A comprehensive, production-ready backend for managing office operations including parking, desk booking, cafeteria, attendance, leave management, IT assets, and project management.
+A **comprehensive, production-ready backend API** for managing all office operations including parking, desk booking, cafeteria, attendance, leave management, IT assets, and project management. Built with **FastAPI**, **PostgreSQL**, and **AI-powered semantic search**.
+
+---
 
 ## 📋 Table of Contents
 
+- [Overview](#overview)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
+- [Architecture](#architecture)
 - [Quick Start](#quick-start)
 - [User Roles & Hierarchy](#user-roles--hierarchy)
 - [API Endpoints Documentation](#api-endpoints-documentation)
-  - [Authentication](#1-authentication-endpoints)
-  - [User Management](#2-user-management-endpoints)
-  - [Attendance](#3-attendance-endpoints)
-  - [Leave Management](#4-leave-management-endpoints)
-  - [Parking](#5-parking-endpoints)
-  - [Desk & Conference Rooms](#6-desk--conference-room-endpoints)
-  - [Cafeteria & Food](#7-cafeteria--food-ordering-endpoints)
-  - [IT Assets](#8-it-asset-management-endpoints)
-  - [IT Requests](#9-it-request-endpoints)
-  - [Projects](#10-project-management-endpoints)
-  - [Holidays](#11-holiday-management-endpoints)
-  - [Search](#12-semantic-search-endpoints)
+- [Complete Workflows](#-complete-system-workflows)
+- [Database Schema](#database-schema)
+- [Development Guide](#development-guide)
 - [Testing](#testing)
+- [Deployment](#deployment)
 - [Environment Variables](#environment-variables)
+- [Troubleshooting](#troubleshooting)
 
-## Features
+---
 
-- **Authentication & Authorization**: JWT-based auth with role-based access control (RBAC)
-- **User Management**: 5-tier hierarchical user system (Super Admin → Admin → Manager → Team Lead → Employee)
-- **Parking Management**: Employee parking slot allocation and tracking
-- **Desk & Conference Room Booking**: Time-based desk and meeting room reservations
-- **Cafeteria Management**: Table booking and food ordering system
-- **Attendance Tracking**: Check-in/out with hierarchical approval workflow
-- **Leave Management**: Multi-level leave request and approval system
-- **IT Asset Management**: Hardware inventory, tracking, and assignment
-- **IT Support Requests**: IT request lifecycle from submission to resolution
-- **Project Management**: Team lead project request and approval
-- **Holiday Management**: Company holiday calendar
-- **Semantic Search**: AI-powered vector search for food items and IT assets
+## 🎯 Overview
 
-## Tech Stack
+The **Unified Office Management System** is a modern, scalable backend solution designed to digitize and streamline all office operations. It provides a RESTful API with role-based access control, hierarchical approval workflows, and AI-powered features.
 
-- **Framework**: FastAPI (Python 3.11+)
-- **Database**: PostgreSQL with pgvector extension
-- **ORM**: SQLAlchemy 2.0 (Async)
-- **Migrations**: Alembic
-- **Authentication**: OAuth2 with JWT (HS256)
-- **AI/ML**: Sentence Transformers for semantic embeddings
-- **Containerization**: Docker + Docker Compose
+### Key Highlights
+
+- ✅ **12+ Modules**: Authentication, Users, Attendance, Leave, Parking, Desks, Cafeteria, Food Orders, IT Assets, IT Requests, Projects, Holidays, Semantic Search
+- ✅ **5-Tier Hierarchy**: Super Admin → Admin → Manager → Team Lead → Employee
+- ✅ **JWT Authentication**: Secure token-based auth with refresh tokens
+- ✅ **Role-Based Access Control**: Fine-grained permissions for all operations
+- ✅ **Async Architecture**: Built with FastAPI for high performance
+- ✅ **PostgreSQL + pgvector**: Robust database with vector search support
+- ✅ **AI-Powered Search**: Semantic search using sentence transformers
+- ✅ **Production-Ready**: Docker support, migrations, comprehensive testing
+- ✅ **Auto-Generated Codes**: User codes, asset codes, request numbers
+- ✅ **Approval Workflows**: Multi-level approvals for attendance, leave, projects
+- ✅ **Real-time Operations**: Check-in/out, parking allocation, food ordering
+
+---
+
+---
+
+## ✨ Features
+
+### 🔐 Authentication & Authorization
+- **JWT-based authentication** with access and refresh tokens
+- **OAuth2 password flow** for secure login
+- **Role-based access control (RBAC)** at endpoint level
+- **Password change** functionality for users and admins
+- **Token expiration** handling (24hr access, 7-day refresh)
+- **Hierarchical permissions** based on organizational structure
+
+### 👥 User Management
+- **5-tier hierarchical structure**: Super Admin → Admin → Manager → Team Lead → Employee
+- **Auto-generated user codes**: 6-character unique identifiers (e.g., AB1234)
+- **Auto-generated emails**: firstname.lastname@company.com
+- **Manager types**: Parking, Attendance, Desk/Conference, Cafeteria, IT Support
+- **Department-wise Team Leads**: Engineering, Sales, AI, HR, etc.
+- **User lifecycle management**: Create, update, deactivate, delete
+- **Vehicle information**: Support for employee vehicles (car/bike)
+- **Bulk operations**: Toggle active status, change roles, reset passwords
+
+### 📊 Attendance Tracking
+- **Simple check-in/check-out**: One-click operations, no manual data entry
+- **Multiple entries per day**: Support for lunch breaks, outside meetings
+- **Auto-calculation**: Total work hours computed automatically
+- **Draft mode**: Employees can edit before submission
+- **Hierarchical approval**: Team Lead → Manager → Admin chain
+- **Attendance Manager**: Special role to view/approve ALL attendance
+- **Date-based tracking**: Daily attendance records with timestamps
+- **History & Reports**: View historical attendance data
+
+### 🏖️ Leave Management
+- **Four leave types**: Casual (10 days), Sick (12 days), Privilege (15 days), Unpaid
+- **Leave balance tracking**: Auto-deduction on approval
+- **Two-level approval**: Level 1 (Team Lead) + Level 2 (Manager)
+- **Half-day support**: First half or second half options
+- **Date range validation**: Prevent overlaps and past-date requests
+- **Leave cancellation**: Cancel pending requests
+- **Pending approvals dashboard**: For Team Leads and Managers
+
+### 🅿️ Parking Management
+- **Simplified allocation**: One-click allocate/release, no forms
+- **Auto-assignment**: First available slot assigned automatically
+- **Slot management**: Create, delete, enable/disable slots
+- **Entry/exit logging**: Track parking duration
+- **Visitor parking**: Manual assignment by Parking Manager
+- **Real-time status**: View current parking status
+- **Parking history**: Complete logs with duration tracking
+- **Slot statistics**: Total, available, occupied counts
+
+### 🪑 Desk & Conference Room Booking
+- **Date-range bookings**: Book desks for multiple days
+- **Instant confirmation**: Desk bookings auto-confirmed
+- **Conference room approval**: Manager approval required
+- **Overlap prevention**: Cannot double-book resources
+- **Equipment tracking**: Monitor, docking station availability
+- **Zone-based organization**: Group desks by zones
+- **Booking cancellation**: Cancel future bookings
+- **My bookings view**: See personal reservations
+
+### 🍽️ Cafeteria & Food Ordering
+- **Multi-item cart**: Order multiple food items in one go
+- **Category-based menu**: Breakfast, Lunch, Snacks, Beverages
+- **Dietary information**: Vegetarian, non-veg, dietary restrictions
+- **Order tracking**: Status progression (Pending → Confirmed → Preparing → Ready → Delivered)
+- **Auto-generated order numbers**: ORD-YYYYMMDD-NNN format
+- **Special instructions**: Custom notes per item
+- **Price calculation**: Auto-compute total amount
+- **Table booking**: Reserve cafeteria tables for meetings
+- **Order history**: View past orders
+
+### 💻 IT Asset Management
+- **Asset lifecycle tracking**: From procurement to retirement
+- **Auto-generated asset codes**: LAP-001, MON-002, etc.
+- **Multiple asset types**: Laptop, Monitor, Keyboard, Mouse, Headphones, etc.
+- **Assignment tracking**: Who has what equipment
+- **Assignment history**: Complete audit trail
+- **Status management**: Available, Assigned, Under Maintenance, Retired
+- **Specifications storage**: JSON field for detailed specs
+- **Warranty tracking**: Purchase date and warranty expiry
+- **Semantic search**: AI-powered asset discovery
+
+### 🛠️ IT Request Management  
+- **Request types**: New Asset, Repair, Replacement, Software Install, Access Request, Network Issue
+- **Priority levels**: Low, Medium, High, Urgent
+- **Auto-generated request numbers**: REQ-YYYYMMDD-NNN
+- **Approval workflow**: IT Manager approval required
+- **Assignment**: Assign requests to IT staff
+- **Status tracking**: Pending → Approved/Rejected
+- **Rejection reasons**: Provide feedback to requesters
+- **My requests view**: Users see their own requests
+
+### 📁 Project Management
+- **Team Lead project proposals**: Submit project ideas with business case
+- **Admin approval**: Budget and resource approval
+- **Budget tracking**: Estimated vs approved budget
+- **Auto-generated project codes**: PRJ-YYYY-NNN
+- **Status lifecycle**: Pending → Approved → In Progress → Completed
+- **Team size planning**: Specify required team members
+- **Skills tracking**: Required skills for project
+- **Business justification**: Capture ROI and business case
+- **Project updates**: Change status, add notes
+
+### 📅 Holiday Management
+- **Company-wide holidays**: Centralized holiday calendar
+- **Mandatory vs optional**: Flag critical holidays
+- **Year-based filtering**: View holidays by year
+- **Leave integration**: Holidays don't count in leave days
+- **CRUD operations**: Admin can create, update, delete holidays
+- **Description field**: Add context for each holiday
+
+### 🔍 Semantic Search
+- **AI-powered**: Uses sentence-transformers (all-MiniLM-L6-v2)
+- **Two search domains**: Food items and IT assets
+- **Vector embeddings**: 384-dimensional vectors stored in pgvector
+- **Semantic understanding**: Finds results by meaning, not just keywords
+- **Ranked results**: Ordered by similarity score (0-1)
+- **Example queries**: 
+  - Food: "spicy vegetarian lunch", "healthy breakfast"
+  - IT: "high performance laptop", "4K monitor"
+
+---
+
+---
+
+## 🛠️ Tech Stack
+
+### Backend Framework
+- **FastAPI 0.109.0**: Modern, high-performance Python web framework
+- **Uvicorn**: ASGI server with WebSocket support
+- **Python 3.11+**: Latest Python features and performance improvements
+
+### Database
+- **PostgreSQL 15+**: Robust relational database
+- **pgvector**: PostgreSQL extension for vector similarity search
+- **SQLAlchemy 2.0**: Async ORM with declarative mapping
+- **Asyncpg**: High-performance PostgreSQL driver for async operations
+- **Alembic**: Database migration tool for schema versioning
+
+### Authentication & Security
+- **Python-JOSE**: JWT token creation and validation
+- **Passlib + Bcrypt**: Secure password hashing (cost factor: 12)
+- **OAuth2 Password Flow**: Industry-standard authentication
+- **CORS Middleware**: Cross-origin resource sharing support
+
+### AI/ML
+- **Sentence Transformers 2.2.2**: Pre-trained embedding models
+- **PyTorch 2.1.2**: Deep learning framework
+- **NumPy 1.26.3**: Numerical computations
+- **Model**: all-MiniLM-L6-v2 (384-dim embeddings)
+
+### Validation & Serialization
+- **Pydantic 2.5.3**: Data validation using Python type annotations
+- **Pydantic Settings**: Environment variable management
+- **Email Validation**: Built-in email validation
+
+### Testing
+- **Pytest 7.4.4**: Testing framework
+- **Pytest-Asyncio 0.23.3**: Async test support
+- **Pytest-Cov 4.1.0**: Code coverage reports
+- **HTTPX 0.26.0**: Async HTTP client for API testing
+
+### DevOps & Deployment
+- **Docker**: Containerization for consistent environments
+- **Docker Compose**: Multi-container orchestration
+- **Git**: Version control
+
+### Additional Libraries
+- **Python-Multipart**: File upload support
+- **Aiofiles**: Async file operations
+- **Python-Dotenv**: .env file support
+
+---
+
+## 🏗️ Architecture
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Client Layer                             │
+│  (Web App, Mobile App, Third-party Integrations)                 │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │ HTTPS/REST API
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      API Gateway Layer                           │
+│  FastAPI Application (app/main.py)                               │
+│  - CORS Middleware                                               │
+│  - Response Middleware (logging, formatting)                     │
+│  - Exception Handlers (validation, HTTP, generic)                │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       Routing Layer                              │
+│  API Router (app/api/v1/router.py)                               │
+│  - /auth, /users, /attendance, /leave                            │
+│  - /parking, /desks, /cafeteria, /food-orders                    │
+│  - /it-assets, /it-requests, /projects, /holidays, /search       │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Endpoint Layer                               │
+│  Controllers (app/api/v1/endpoints/)                             │
+│  - Request validation (Pydantic schemas)                         │
+│  - Authentication/Authorization (JWT dependencies)               │
+│  - Call service layer methods                                    │
+│  - Format standardized responses                                 │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Service Layer                                │
+│  Business Logic (app/services/)                                  │
+│  - attendance_service, leave_service, parking_service            │
+│  - user_service, auth_service, desk_service                      │
+│  - food_service, it_asset_service, it_request_service            │
+│  - project_service, search_service, embedding_service            │
+│  - Implements business rules and workflows                       │
+│  - Validates complex business constraints                        │
+│  - Manages transactions                                          │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   Data Access Layer                              │
+│  ORM Models (app/models/)                                        │
+│  - User, Attendance, AttendanceEntry, Leave                      │
+│  - ParkingSlot, ParkingAllocation, Desk, DeskBooking             │
+│  - CafeteriaTable, FoodItem, FoodOrder, ITAsset                  │
+│  - ITRequest, Project, Holiday                                   │
+│  - SQLAlchemy async sessions with connection pooling             │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Database Layer                               │
+│  PostgreSQL 15 + pgvector Extension                              │
+│  - Relational tables with proper constraints                     │
+│  - Vector columns (food_items.embedding, it_assets.embedding)    │
+│  - Indexes (B-tree for queries, IVFFlat for vector similarity)   │
+│  - Foreign key constraints for referential integrity             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Async-First Design
+The entire backend is built with async/await patterns for optimal performance:
+- **Async SQLAlchemy**: Uses `AsyncSession` with `asyncpg` driver for non-blocking database operations
+- **Async Endpoints**: All FastAPI endpoints are async functions
+- **Connection Pooling**: Efficient database connection management
+- **Non-Blocking I/O**: All database queries and external calls are non-blocking
+
+### Service Layer Pattern
+Business logic is separated into service classes:
+```
+Endpoint (API) → Service (Business Logic) → Model (Database)
+```
+
+Each service handles:
+- Data validation and transformation
+- Relationship loading (using `selectinload` for eager loading)
+- Business rule enforcement (approval hierarchies, date validations, etc.)
+- Error handling with descriptive messages
+- Complex query logic
+
+### Request Flow Example (Attendance Check-in)
+
+```
+1. Client: POST /api/v1/attendance/check-in
+   Headers: Authorization: Bearer <token>
+   ↓
+2. Endpoint Layer (attendance.py)
+   - JWT middleware validates token
+   - Extracts current_user from dependency
+   - No request body needed (simplified UX)
+   ↓
+3. Service Layer (attendance_service.check_in)
+   - Check if user already has open check-in today
+   - If no attendance record for today, create new Attendance
+   - Create AttendanceEntry with check_in timestamp
+   - Set entry_type to "regular"
+   ↓
+4. Data Layer (models/attendance.py)
+   - INSERT INTO attendance (user_id, date, status, ...)
+   - INSERT INTO attendance_entry (attendance_id, check_in, ...)
+   - COMMIT transaction
+   ↓
+5. Response Formatting
+   - Standard JSON response with success, data, message, timestamp
+   - Return complete attendance with entries
+   ↓
+6. Client receives:
+   {
+     "success": true,
+     "data": {...attendance with entries...},
+     "message": "Check-in recorded successfully",
+     "timestamp": "2026-02-11T09:00:00Z"
+   }
+```
+
+### Database Design Principles
+
+- **Normalization**: 3NF for most tables to eliminate redundancy
+- **Foreign Keys**: Enforce referential integrity between related tables
+- **Indexes**: Strategic indexes on frequently queried columns
+  - `user_code`, `email` (UNIQUE)
+  - `date`, `status`, `booking_date` for filtering
+  - Foreign key columns for JOIN optimization
+- **Enums**: PostgreSQL enums for type-safe status fields
+- **Soft Deletes**: `is_deleted` flag instead of hard deletes for audit trails
+- **Timestamps**: `created_at`, `updated_at` on all tables
+- **UUIDs**: UUID primary keys for distributed system readiness
+- **Vector Columns**: pgvector type for semantic search embeddings
+- **Composite Keys**: Where appropriate (e.g., user_code + date for attendance)
+
+---
+
+## 🗄️ Database Schema
+
+### Core Tables Overview
+
+| Table | Purpose | Key Columns | Relationships |
+|-------|---------|-------------|---------------|
+| **users** | User accounts & hierarchy | user_code, email, role, manager_type | → attendance, leave, parking, etc. |
+| **attendance** | Daily attendance records | user_id, date, status | → attendance_entries, ← users |
+| **attendance_entries** | Check-in/out entries | attendance_id, check_in, check_out | ← attendance |
+| **leave_requests** | Leave applications | user_id, leave_type, dates, status | ← users |
+| **parking_slots** | Parking slot inventory | slot_code, status | → parking_allocations |
+| **parking_allocations** | Active/historical parking | user_id, slot_id, entry/exit_time | ← users, ← parking_slots |
+| **desks** | Desk/room inventory | desk_code, type, status | → desk_bookings |
+| **desk_bookings** | Desk/room reservations | user_id, desk_id, dates | ← users, ← desks |
+| **cafeteria_tables** | Table inventory | table_code, capacity | → cafeteria_bookings |
+| **cafeteria_bookings** | Table reservations | user_id, table_id, time | ← users, ← cafeteria_tables |
+| **food_items** | Menu items | name, category, price, embedding | → order_items |
+| **food_orders** | Food orders | user_id, order_number, status | ← users, → order_items |
+| **order_items** | Order line items | order_id, item_id, quantity | ← food_orders, ← food_items |
+| **it_assets** | IT equipment | asset_code, type, status, embedding | → assignments, → it_requests |
+| **asset_assignments** | Asset assignment history | asset_id, user_id, dates | ← it_assets, ← users |
+| **it_requests** | IT support requests | request_number, user_id, type, status | ← users |
+| **projects** | Project proposals | project_code, team_lead_id, budget | ← users |
+| **holidays** | Company holidays | holiday_name, holiday_date | (standalone) |
+
+### Users Table (Core Entity)
+
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_code VARCHAR(6) UNIQUE NOT NULL,  -- Auto-generated (AB1234)
+    email VARCHAR(255) UNIQUE NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    hashed_password VARCHAR(255) NOT NULL,
+    role user_role NOT NULL,  -- enum: super_admin, admin, manager, team_lead, employee
+    manager_type manager_type,  -- enum: parking, attendance, desk_conference, cafeteria, it_support
+    department VARCHAR(100),  -- For team leads
+    phone VARCHAR(20),
+    
+    -- Hierarchical relationships
+    team_lead_code VARCHAR(6),  -- FK to users.user_code (team lead)
+    manager_code VARCHAR(6),    -- FK to users.user_code (manager)
+    admin_code VARCHAR(6),      -- FK to users.user_code (admin)
+    approver_code VARCHAR(6),   -- FK to users.user_code (for attendance/leave)
+    
+    -- Vehicle info (for parking)
+    vehicle_number VARCHAR(20),
+    vehicle_type vehicle_type,  -- enum: car, bike, two_wheeler
+    
+    -- Status flags
+    is_active BOOLEAN DEFAULT TRUE,
+    is_deleted BOOLEAN DEFAULT FALSE,
+    
+    -- Audit timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CHECK (manager_type IS NOT NULL OR role != 'manager'),
+    CHECK (department IS NOT NULL OR role != 'team_lead')
+);
+
+-- Indexes
+CREATE UNIQUE INDEX idx_users_user_code ON users(user_code);
+CREATE UNIQUE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_users_team_lead_code ON users(team_lead_code);
+```
+
+### Attendance Tables
+
+```sql
+-- Main attendance record (one per user per day)
+CREATE TABLE attendance (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    date DATE NOT NULL,
+    status attendance_status NOT NULL DEFAULT 'draft',  -- enum: draft, pending_approval, approved, rejected
+    
+    -- Calculated fields (auto-updated from entries)
+    first_check_in TIME,
+    last_check_out TIME,
+    total_hours DECIMAL(5,2),  -- Total work hours for the day
+    
+    -- Approval workflow
+    submitted_at TIMESTAMP,
+    approver_code VARCHAR(6),  -- Who needs to approve
+    approved_at TIMESTAMP,
+    approved_by_code VARCHAR(6),
+    rejection_reason TEXT,
+    
+    -- Audit
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    UNIQUE(user_id, date)  -- One attendance record per user per day
+);
+
+-- Individual check-in/check-out entries (multiple per day)
+CREATE TABLE attendance_entries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    attendance_id UUID NOT NULL REFERENCES attendance(id) ON DELETE CASCADE,
+    check_in TIMESTAMP NOT NULL,
+    check_out TIMESTAMP,
+    entry_type entry_type DEFAULT 'regular',  -- enum: regular, overtime, break
+    duration_hours DECIMAL(5,2),  -- Calculated: check_out - check_in
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_attendance_user_date ON attendance(user_id, date);
+CREATE INDEX idx_attendance_status ON attendance(status);
+CREATE INDEX idx_attendance_entries_attendance_id ON attendance_entries(attendance_id);
+```
+
+### Leave Tables
+
+```sql
+CREATE TABLE leave_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    leave_type leave_type NOT NULL,  -- enum: casual, sick, privilege, unpaid
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    total_days DECIMAL(3,1) NOT NULL,  -- Can be 0.5 for half-day
+    
+    -- Half-day support
+    is_half_day BOOLEAN DEFAULT FALSE,
+    half_day_type half_day_type,  -- enum: first_half, second_half
+    
+    reason TEXT NOT NULL,
+    status leave_status NOT NULL DEFAULT 'pending_level1',  -- enum: pending_level1, approved_level1, pending_level2, approved_final, rejected, cancelled
+    
+    -- Level 1 approval (Team Lead)
+    level1_approver_code VARCHAR(6),
+    level1_approved_at TIMESTAMP,
+    level1_notes TEXT,
+    
+    -- Level 2 approval (Manager)
+    level2_approver_code VARCHAR(6),
+    level2_approved_at TIMESTAMP,
+    level2_notes TEXT,
+    
+    rejection_reason TEXT,
+    cancelled_at TIMESTAMP,
+    
+    -- Audit
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CHECK (end_date >= start_date),
+    CHECK (total_days > 0)
+);
+
+CREATE INDEX idx_leave_user_id ON leave_requests(user_id);
+CREATE INDEX idx_leave_status ON leave_requests(status);
+CREATE INDEX idx_leave_dates ON leave_requests(start_date, end_date);
+```
+
+### Parking Tables
+
+```sql
+CREATE TABLE parking_slots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    slot_code VARCHAR(10) UNIQUE NOT NULL,  -- e.g., A-01, B-15
+    status parking_slot_status NOT NULL DEFAULT 'available',  -- enum: available, occupied, disabled
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE parking_allocations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),  -- Null for visitors
+    slot_id UUID NOT NULL REFERENCES parking_slots(id),
+    
+    -- Vehicle info (denormalized for history)
+    vehicle_number VARCHAR(20) NOT NULL,
+    vehicle_type vehicle_type NOT NULL,
+    
+    -- Visitor info
+    visitor_name VARCHAR(100),  -- For non-employee parking
+    
+    -- Time tracking
+    entry_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    exit_time TIMESTAMP,
+    duration_mins INTEGER,  -- Calculated on exit
+    
+    -- Status
+    is_active BOOLEAN DEFAULT TRUE,  -- TRUE = currently parked, FALSE = exited
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_parking_user_id ON parking_allocations(user_id);
+CREATE INDEX idx_parking_slot_id ON parking_allocations(slot_id);
+CREATE INDEX idx_parking_is_active ON parking_allocations(is_active);
+```
+
+### Desk & Conference Room Tables
+
+```sql
+CREATE TABLE desks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    desk_code VARCHAR(10) UNIQUE NOT NULL,  -- Auto-generated: D-001, CR-001
+    desk_label VARCHAR(100) NOT NULL,  -- Display name: "Desk 25", "Meeting Room A"
+    desk_type desk_type NOT NULL,  -- enum: desk, conference_room
+    status desk_status NOT NULL DEFAULT 'available',  -- enum: available, assigned, maintenance
+    
+    -- Location
+    zone VARCHAR(50),  -- e.g., "Zone A", "Floor 3"
+    
+    -- Equipment
+    has_monitor BOOLEAN DEFAULT FALSE,
+    has_docking_station BOOLEAN DEFAULT FALSE,
+    capacity INTEGER,  -- For conference rooms
+    
+    notes TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE desk_bookings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    desk_id UUID NOT NULL REFERENCES desks(id),
+    
+    -- Date range booking
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    
+    purpose TEXT,
+    status booking_status NOT NULL DEFAULT 'confirmed',  -- enum: pending, confirmed, cancelled
+    
+    -- For conference rooms (approval workflow)
+    approved_by_id UUID REFERENCES users(id),
+    approved_at TIMESTAMP,
+    rejection_reason TEXT,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Prevent overlapping bookings
+    EXCLUDE USING gist (
+        desk_id WITH =,
+        daterange(start_date, end_date, '[]') WITH &&
+    )
+);
+
+CREATE INDEX idx_desk_bookings_user_id ON desk_bookings(user_id);
+CREATE INDEX idx_desk_bookings_desk_id ON desk_bookings(desk_id);
+CREATE INDEX idx_desk_bookings_dates ON desk_bookings(start_date, end_date);
+```
+
+### Food Ordering Tables
+
+```sql
+-- Menu items with embeddings for semantic search
+CREATE TABLE food_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    category food_category NOT NULL,  -- enum: breakfast, lunch, snacks, beverages, dinner
+    price DECIMAL(10,2) NOT NULL,
+    
+    -- Dietary info
+    is_vegetarian BOOLEAN DEFAULT TRUE,
+    is_vegan BOOLEAN DEFAULT FALSE,
+    ingredients JSONB,  -- Array of ingredients
+    dietary_info JSONB,  -- Array of tags: ["gluten-free", "spicy", etc.]
+    
+    -- Availability
+    is_available BOOLEAN DEFAULT TRUE,
+    available_days JSONB,  -- Array of days: ["monday", "tuesday"]
+    
+    -- Semantic search
+    embedding vector(384),  -- pgvector column for semantic search
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE food_orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    order_number VARCHAR(50) UNIQUE NOT NULL,  -- ORD-20260211-001
+    
+    status order_status NOT NULL DEFAULT 'pending',  -- enum: pending, confirmed, preparing, ready, delivered, cancelled
+    total_amount DECIMAL(10,2) NOT NULL,
+    
+    order_date DATE NOT NULL,
+    delivery_time TIME,
+    notes TEXT,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE order_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id UUID NOT NULL REFERENCES food_orders(id) ON DELETE CASCADE,
+    item_id UUID NOT NULL REFERENCES food_items(id),
+    
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    price DECIMAL(10,2) NOT NULL,  -- Price at time of order (denormalized)
+    subtotal DECIMAL(10,2) NOT NULL,  -- quantity * price
+    
+    special_instructions TEXT
+);
+
+CREATE INDEX idx_food_orders_user_id ON food_orders(user_id);
+CREATE INDEX idx_food_orders_order_number ON food_orders(order_number);
+CREATE INDEX idx_order_items_order_id ON order_items(order_id);
+```
+
+### IT Asset Tables
+
+```sql
+CREATE TABLE it_assets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    asset_code VARCHAR(20) UNIQUE NOT NULL,  -- LAP-001, MON-002, etc.
+    asset_name VARCHAR(200) NOT NULL,
+    asset_type asset_type NOT NULL,  -- enum: laptop, monitor, keyboard, mouse, headphones, docking_station, printer, etc.
+    
+    status asset_status NOT NULL DEFAULT 'available',  -- enum: available, assigned, under_maintenance, retired
+    
+    -- Product details
+    manufacturer VARCHAR(100),
+    model VARCHAR(100),
+    serial_number VARCHAR(100),
+    specifications JSONB,  -- Flexible JSON for specs
+    
+    -- Purchase info
+    purchase_date DATE,
+    purchase_price DECIMAL(12,2),
+    warranty_until DATE,
+    
+    -- Current assignment
+    assigned_to_id UUID REFERENCES users(id),
+    assigned_at TIMESTAMP,
+    
+    -- Semantic search
+    embedding vector(384),  -- For searching assets by description
+    
+    notes TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE asset_assignments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    asset_id UUID NOT NULL REFERENCES it_assets(id),
+    user_id UUID NOT NULL REFERENCES users(id),
+    
+    assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    returned_at TIMESTAMP,
+    notes TEXT,
+    
+    is_current BOOLEAN DEFAULT TRUE  -- Only one current assignment per asset
+);
+
+CREATE INDEX idx_it_assets_asset_code ON it_assets(asset_code);
+CREATE INDEX idx_it_assets_status ON it_assets(status);
+CREATE INDEX idx_asset_assignments_asset_id ON asset_assignments(asset_id);
+CREATE INDEX idx_asset_assignments_user_id ON asset_assignments(user_id);
+```
+
+### IT Request Table
+
+```sql
+CREATE TABLE it_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    request_number VARCHAR(50) UNIQUE NOT NULL,  -- REQ-20260211-001
+    user_id UUID NOT NULL REFERENCES users(id),
+    
+    request_type it_request_type NOT NULL,  -- enum: new, new_asset, repair, replacement, software_install, access_request, network_issue, other
+    item_type asset_type,  -- For hardware requests
+    
+    title VARCHAR(200) NOT NULL,
+    description TEXT NOT NULL,
+    priority priority_level NOT NULL DEFAULT 'medium',  -- enum: low, medium, high, urgent
+    
+    status request_status NOT NULL DEFAULT 'pending',  -- enum: pending, approved, in_progress, completed, rejected, cancelled
+    
+    required_by DATE,
+    
+    -- Approval
+    approved_by_code VARCHAR(6),
+    approved_at TIMESTAMP,
+    approval_notes TEXT,
+    
+    -- Assignment
+    assigned_to_code VARCHAR(6),  -- IT staff handling the request
+    
+    -- Completion
+    completed_at TIMESTAMP,
+    resolution_notes TEXT,
+    assigned_asset_id UUID REFERENCES it_assets(id),  -- For NEW_ASSET requests
+    
+    rejection_reason TEXT,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_it_requests_user_id ON it_requests(user_id);
+CREATE INDEX idx_it_requests_status ON it_requests(status);
+CREATE INDEX idx_it_requests_request_number ON it_requests(request_number);
+```
+
+### Project Table
+
+```sql
+CREATE TABLE projects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_code VARCHAR(50) UNIQUE NOT NULL,  -- PRJ-2026-001
+    project_name VARCHAR(200) NOT NULL,
+    description TEXT NOT NULL,
+    
+    team_lead_id UUID NOT NULL REFERENCES users(id),
+    
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    
+    estimated_budget DECIMAL(15,2),
+    approved_budget DECIMAL(15,2),
+    actual_cost DECIMAL(15,2),
+    
+    team_size INTEGER,
+    required_skills JSONB,  -- Array of skills
+    
+    status project_status NOT NULL DEFAULT 'pending_approval',  -- enum: pending_approval, approved, in_progress, on_hold, completed, cancelled, rejected
+    
+    business_justification TEXT,
+    
+    -- Approval
+    approved_by_code VARCHAR(6),
+    approved_at TIMESTAMP,
+    approval_notes TEXT,
+    rejection_reason TEXT,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    CHECK (end_date >= start_date)
+);
+
+CREATE INDEX idx_projects_team_lead_id ON projects(team_lead_id);
+CREATE INDEX idx_projects_status ON projects(status);
+CREATE INDEX idx_projects_project_code ON projects(project_code);
+```
+
+### Holiday Table
+
+```sql
+CREATE TABLE holidays (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    holiday_name VARCHAR(200) NOT NULL,
+    holiday_date DATE NOT NULL,
+    is_mandatory BOOLEAN DEFAULT TRUE,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    UNIQUE(holiday_date)  -- One holiday per date
+);
+
+CREATE INDEX idx_holidays_date ON holidays(holiday_date);
+```
+
+### Enums
+
+```sql
+-- User-related enums
+CREATE TYPE user_role AS ENUM ('super_admin', 'admin', 'manager', 'team_lead', 'employee');
+CREATE TYPE manager_type AS ENUM ('parking', 'attendance', 'desk_conference', 'cafeteria', 'it_support');
+CREATE TYPE vehicle_type AS ENUM ('car', 'bike', 'two_wheeler');
+
+-- Attendance-related enums
+CREATE TYPE attendance_status AS ENUM ('draft', 'pending_approval', 'approved', 'rejected');
+CREATE TYPE entry_type AS ENUM ('regular', 'overtime', 'break');
+
+-- Leave-related enums
+CREATE TYPE leave_type AS ENUM ('casual', 'sick', 'privilege', 'unpaid');
+CREATE TYPE leave_status AS ENUM ('pending_level1', 'approved_level1', 'pending_level2', 'approved_final', 'rejected', 'cancelled');
+CREATE TYPE half_day_type AS ENUM ('first_half', 'second_half');
+
+-- Parking-related enums
+CREATE TYPE parking_slot_status AS ENUM ('available', 'occupied', 'disabled');
+
+-- Desk-related enums
+CREATE TYPE desk_type AS ENUM ('desk', 'conference_room');
+CREATE TYPE desk_status AS ENUM ('available', 'assigned', 'maintenance');
+CREATE TYPE booking_status AS ENUM ('pending', 'confirmed', 'cancelled');
+
+-- Food-related enums
+CREATE TYPE food_category AS ENUM ('breakfast', 'lunch', 'snacks', 'beverages', 'dinner');
+CREATE TYPE order_status AS ENUM ('pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled');
+
+-- IT-related enums
+CREATE TYPE asset_type AS ENUM ('laptop', 'monitor', 'keyboard', 'mouse', 'headphones', 'docking_station', 'printer', 'scanner', 'tablet', 'phone', 'other');
+CREATE TYPE asset_status AS ENUM ('available', 'assigned', 'under_maintenance', 'retired');
+CREATE TYPE it_request_type AS ENUM ('new', 'new_asset', 'repair', 'replacement', 'software_install', 'access_request', 'network_issue', 'other');
+CREATE TYPE priority_level AS ENUM ('low', 'medium', 'high', 'urgent');
+CREATE TYPE request_status AS ENUM ('pending', 'approved', 'in_progress', 'completed', 'rejected', 'cancelled');
+
+-- Project-related enums
+CREATE TYPE project_status AS ENUM ('pending_approval', 'approved', 'in_progress', 'on_hold', 'completed', 'cancelled', 'rejected');
+```
+
+### Vector Search Setup
+
+```sql
+-- Install pgvector extension
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- Create IVFFlat index for faster similarity search (after data is populated)
+CREATE INDEX idx_food_items_embedding ON food_items 
+USING ivfflat (embedding vector_cosine_ops) 
+WITH (lists = 100);
+
+CREATE INDEX idx_it_assets_embedding ON it_assets 
+USING ivfflat (embedding vector_cosine_ops) 
+WITH (lists = 100);
+```
+
+---
+
+### Response Formatting
+All API responses follow a consistent format:
+```json
+{
+  "success": true,
+  "data": { ... },
+  "message": "Operation successful",
+  "timestamp": "2026-02-11T10:30:00Z"
+}
+```
+
+### Relationship Loading
+SQLAlchemy relationships are properly loaded using `selectinload` to avoid N+1 query problems and `MissingGreenlet` errors in async contexts:
+```python
+# Example from IT Request Service
+result = await self.db.execute(
+    select(ITRequest)
+    .options(
+        selectinload(ITRequest.user),
+        selectinload(ITRequest.asset),
+        selectinload(ITRequest.approved_by),
+        selectinload(ITRequest.assigned_to)
+    )
+)
+```
+
+---
 
 ## Quick Start
 
@@ -1533,18 +2405,19 @@ Parking is now simple and easy! Everyone can use parking (allocate/release their
 
 ## 9. IT Request Endpoints
 
+IT Requests follow a simplified workflow: Create → Approve/Reject. No separate "start" or "complete" steps.
+
 ### `POST /it-requests`
 **Description**: Create an IT request
 
 **Request Body**:
 ```json
 {
-  "request_type": "hardware",  // hardware | software | access | support
-  "item_type": "laptop",  // For hardware: laptop | monitor | keyboard | mouse | headphones
+  "request_type": "NEW_ASSET",  // NEW, NEW_ASSET, REPAIR, REPLACEMENT, SOFTWARE_INSTALL, ACCESS_REQUEST, NETWORK_ISSUE, OTHER
   "title": "Need new laptop",
   "description": "Current laptop is slow, need upgrade for development work",
-  "priority": "high",  // low | medium | high | urgent
-  "required_by": "2026-02-20"  // Optional
+  "priority": "HIGH",  // LOW | MEDIUM | HIGH | URGENT
+  "related_asset_code": "LAP-001"  // Optional: if request relates to existing asset
 }
 ```
 
@@ -1554,15 +2427,29 @@ Parking is now simple and easy! Everyone can use parking (allocate/release their
   "success": true,
   "data": {
     "id": "uuid",
-    "request_number": "IT-20260211-001",
-    "user_code": "AB1234",
-    "request_type": "hardware",
-    "item_type": "laptop",
+    "request_number": "ITR-20260211162603-8B4270",
+    "user_code": "1001",
+    "user_name": "John Doe",
+    "request_type": "NEW_ASSET",
+    "related_asset_id": "uuid",
+    "related_asset_code": "LAP-001",
     "title": "Need new laptop",
     "description": "Current laptop is slow...",
-    "status": "pending",  // pending | approved | in_progress | completed | rejected | cancelled
-    "priority": "high",
-    "created_at": "2026-02-11T10:00:00Z"
+    "status": "PENDING",
+    "priority": "HIGH",
+    "approved_by_code": null,
+    "approved_by_name": null,
+    "approved_at": null,
+    "approval_notes": null,
+    "assigned_to_code": null,
+    "assigned_to_name": null,
+    "assigned_at": null,
+    "started_at": null,
+    "completed_at": null,
+    "resolution_notes": null,
+    "rejection_reason": null,
+    "created_at": "2026-02-11T10:00:00Z",
+    "updated_at": "2026-02-11T10:00:00Z"
   },
   "message": "IT request created successfully"
 }
@@ -1575,10 +2462,10 @@ Parking is now simple and easy! Everyone can use parking (allocate/release their
 
 **Query Parameters**:
 - `page`, `page_size`
-- `user_id` (optional): IT Manager only
-- `status` (optional)
-- `request_type` (optional)
-- `priority` (optional)
+- `user_code` (optional): Filter by user code (IT Manager only)
+- `status` (optional): PENDING | APPROVED | REJECTED | IN_PROGRESS | COMPLETED | CANCELLED
+- `request_type` (optional): Filter by request type
+- `priority` (optional): Filter by priority
 
 **Access**:
 - IT Manager: ALL requests
@@ -1591,62 +2478,49 @@ Parking is now simple and easy! Everyone can use parking (allocate/release their
 
 ---
 
-### `GET /it-requests/pending`
-**Description**: Get requests pending approval
-
-**Access**: IT Manager only
-
----
-
 ### `POST /it-requests/{request_id}/approve`
 **Description**: Approve or reject IT request
 
-**Access**: IT Manager only
+**Access**: IT Support Manager only
 
 **Request Body**:
 ```json
 {
   "action": "approve",  // "approve" or "reject"
   "notes": "Approved, will assign laptop by Friday",
-  "assigned_to_id": "uuid",  // Optional: Assign to specific IT staff
+  "assigned_to_code": "IT5001",  // Optional: Assign to specific IT staff user code
   "rejection_reason": "Not justified"  // Required if action is "reject"
 }
 ```
 
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "request_number": "ITR-20260211162603-8B4270",
+    "user_code": "1001",
+    "user_name": "John Doe",
+    "request_type": "NEW_ASSET",
+    "status": "APPROVED",
+    "approved_by_code": "IT5000",
+    "approved_by_name": "IT Manager",
+    "approved_at": "2026-02-11T11:00:00Z",
+    "approval_notes": "Approved, will assign laptop by Friday",
+    "assigned_to_code": "IT5001",
+    "assigned_to_name": "IT Staff Member",
+    "assigned_at": "2026-02-11T11:00:00Z"
+  },
+  "message": "IT request approved successfully"
+}
+```
+
 **Business Logic**:
-- Approved requests move to "approved" status
-- Can assign to IT staff for fulfillment
-- Rejected requests cannot be reopened
-
----
-
-### `PUT /it-requests/{request_id}/status`
-**Description**: Update request status
-
-**Access**: IT Manager only
-
-**Request Body**:
-```json
-{
-  "status": "in_progress",  // approved | in_progress | completed
-  "notes": "Working on it"
-}
-```
-
----
-
-### `POST /it-requests/{request_id}/complete`
-**Description**: Mark request as completed
-
-**Access**: IT Manager only
-
-**Request Body**:
-```json
-{
-  "resolution_notes": "Laptop assigned, asset code: LAP-015",
-  "assigned_asset_id": "uuid"  // Optional: Link to assigned asset
-}
-```
+- Approved requests move to "APPROVED" status
+- Rejected requests move to "REJECTED" status
+- Can optionally assign to IT staff for fulfillment
+- All user details (names) are populated from relationships
 
 ---
 
@@ -1996,6 +2870,114 @@ unified-office-management/
 ├── alembic.ini
 ├── pytest.ini
 └── README.md
+```
+
+## Database Models & Enums
+
+### Core Enums
+
+```python
+# User Roles (hierarchical)
+class UserRole(str, Enum):
+    SUPER_ADMIN = "super_admin"
+    ADMIN = "admin"
+    MANAGER = "manager"
+    TEAM_LEAD = "team_lead"
+    EMPLOYEE = "employee"
+
+# Manager Types (specializations)
+class ManagerType(str, Enum):
+    PARKING = "parking"
+    ATTENDANCE = "attendance"
+    DESK_CONFERENCE = "desk_conference"
+    CAFETERIA = "cafeteria"
+    IT_SUPPORT = "it_support"
+
+# IT Request Types
+class ITRequestType(str, Enum):
+    NEW = "NEW"
+    NEW_ASSET = "NEW_ASSET"
+    REPAIR = "REPAIR"
+    REPLACEMENT = "REPLACEMENT"
+    SOFTWARE_INSTALL = "SOFTWARE_INSTALL"
+    ACCESS_REQUEST = "ACCESS_REQUEST"
+    NETWORK_ISSUE = "NETWORK_ISSUE"
+    OTHER = "OTHER"
+
+# IT Request Status
+class ITRequestStatus(str, Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+# IT Request Priority
+class ITRequestPriority(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    URGENT = "URGENT"
+
+# Leave Types
+class LeaveType(str, Enum):
+    CASUAL = "casual"
+    SICK = "sick"
+    PRIVILEGE = "privilege"
+    UNPAID = "unpaid"
+
+# Attendance Status
+class AttendanceStatus(str, Enum):
+    DRAFT = "draft"
+    PENDING_APPROVAL = "pending_approval"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+# Project Status
+class ProjectStatus(str, Enum):
+    PENDING_APPROVAL = "PENDING_APPROVAL"
+    APPROVED = "APPROVED"
+    IN_PROGRESS = "IN_PROGRESS"
+    ON_HOLD = "ON_HOLD"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+    REJECTED = "REJECTED"
+```
+
+### Key Model Relationships
+
+```
+User
+├── created_by (User) - who created this user
+├── team_lead (User) - user's team lead
+├── manager (User) - user's manager
+├── admin (User) - user's admin
+└── team_members (List[User]) - users reporting to this user
+
+ITRequest
+├── user (User) - who created the request
+├── asset (ITAsset) - related IT asset (optional)
+├── approved_by (User) - who approved/rejected
+└── assigned_to (User) - IT staff assigned to fulfill
+
+ITAsset
+├── assignments (List[ITAssetAssignment]) - assignment history
+└── requests (List[ITRequest]) - related IT requests
+
+Attendance
+├── user (User) - attendance owner
+├── entries (List[AttendanceEntry]) - check-in/out entries
+└── approved_by (User) - who approved
+
+LeaveRequest
+├── user (User) - requester
+├── level1_approver (User) - team lead approval
+└── level2_approver (User) - manager approval
+
+Project
+├── team_lead (User) - project owner
+└── approved_by (User) - admin who approved
 ```
 
 ## Interactive API Documentation
@@ -2390,24 +3372,25 @@ Asset Retirement:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ IT Support Request Lifecycle                                     │
+│ IT Support Request Lifecycle (Simplified)                       │
 └─────────────────────────────────────────────────────────────────┘
 
 EMPLOYEE has IT issue/need
     ↓ Creates IT request
     ↓ [POST /it-requests]
     ↓ Provides: request_type, title, description, priority
+    ↓ Optional: related_asset_code (if request relates to existing asset)
     ↓ Request types: NEW, NEW_ASSET, REPAIR, REPLACEMENT,
     │                 SOFTWARE_INSTALL, ACCESS_REQUEST,
     │                 NETWORK_ISSUE, OTHER
-    ↓ System auto-generates request_number: REQ-20260211-001
+    ↓ System auto-generates request_number: ITR-20260211162603-8B4270
     ↓ Status: PENDING
     ↓
-IT Manager reviews requests
-    ↓ [GET /it-requests] - Sees all pending requests
-    ↓ Views request details
+IT Support Manager reviews requests
+    ↓ [GET /it-requests] - Sees all requests
+    ↓ Views request details with full user information
     ↓
-IT Manager approves or rejects
+IT Support Manager approves or rejects
     ↓ [POST /it-requests/{id}/approve]
     ↓ Request body:
     {
@@ -2419,31 +3402,55 @@ IT Manager approves or rejects
     ↓
 If approved:
     ↓ Status: APPROVED
-    ↓ IT staff (assigned_to) fulfills request
-    ↓ For NEW_ASSET: Creates asset and assigns to requester
-    ↓ For REPAIR: Updates asset status to UNDER_MAINTENANCE
-    ↓ Request marked complete
+    ↓ approved_by_code, approved_by_name populated
+    ↓ approved_at timestamp set
+    ↓ If assigned_to_code provided:
+    │   - assigned_to_code, assigned_to_name populated
+    │   - assigned_at timestamp set
+    ↓ IT staff fulfills request (external to system)
+    ↓ Request complete ✓
     ↓
 If rejected:
     ↓ Status: REJECTED
-    ↓ Employee notified with rejection reason
+    ↓ rejection_reason saved
+    ↓ Employee can view rejection reason
     ↓ Can create new request with more details
 ```
 
 **IT Request Types:**
-1. **NEW**: General IT request
-2. **NEW_ASSET**: Need new equipment (laptop, monitor, etc.)
-3. **REPAIR**: Fix existing asset
-4. **REPLACEMENT**: Replace broken/old asset
-5. **SOFTWARE_INSTALL**: Install software on machine
-6. **ACCESS_REQUEST**: Network/system access
-7. **NETWORK_ISSUE**: Network connectivity problems
-8. **OTHER**: Other IT support needs
+| Type | Description |
+|------|-------------|
+| `NEW` | General IT request |
+| `NEW_ASSET` | Need new equipment (laptop, monitor, etc.) |
+| `REPAIR` | Fix existing asset |
+| `REPLACEMENT` | Replace broken/old asset |
+| `SOFTWARE_INSTALL` | Install software on machine |
+| `ACCESS_REQUEST` | Network/system access |
+| `NETWORK_ISSUE` | Network connectivity problems |
+| `OTHER` | Other IT support needs |
 
-**Simplified Workflow (Approval Only):**
-- No separate "start" or "complete" endpoints
-- IT Manager approves → Request fulfilled
-- Status: PENDING → APPROVED/REJECTED (final states)
+**Priority Levels:**
+| Priority | Description |
+|----------|-------------|
+| `LOW` | Can wait, no urgency |
+| `MEDIUM` | Normal priority |
+| `HIGH` | Important, needs attention soon |
+| `URGENT` | Critical, needs immediate attention |
+
+**Simplified Workflow Benefits:**
+- ✅ Single approval step (no complex state machine)
+- ✅ IT Manager approves → Request is done
+- ✅ Optional assignment to IT staff for tracking
+- ✅ Full user name resolution in responses (user_name, approved_by_name, assigned_to_name)
+- ✅ Related asset linking via asset_code
+
+**Response Format:**
+All IT request responses include:
+- User details: `user_code`, `user_name`
+- Approval details: `approved_by_code`, `approved_by_name`, `approved_at`, `approval_notes`
+- Assignment details: `assigned_to_code`, `assigned_to_name`, `assigned_at`
+- Asset details: `related_asset_id`, `related_asset_code`
+- Timestamps: `created_at`, `updated_at`
 
 ---
 
@@ -2635,6 +3642,163 @@ The `test_all.py` file provides comprehensive testing for:
 - ✅ Error handling and edge cases
 
 **For detailed testing instructions, see [TEST_README.md](TEST_README.md)**
+
+---
+
+## Error Handling
+
+### Standard Error Response Format
+
+```json
+{
+  "success": false,
+  "detail": "Error message explaining what went wrong",
+  "timestamp": "2026-02-11T10:30:00Z"
+}
+```
+
+### Common HTTP Status Codes
+
+| Status Code | Meaning | Common Causes |
+|-------------|---------|---------------|
+| `200 OK` | Success | Request completed successfully |
+| `201 Created` | Resource created | POST request created new resource |
+| `400 Bad Request` | Invalid request | Validation error, business rule violation |
+| `401 Unauthorized` | Not authenticated | Missing or invalid JWT token |
+| `403 Forbidden` | Not authorized | User lacks permission for this action |
+| `404 Not Found` | Resource not found | Invalid ID or resource doesn't exist |
+| `422 Unprocessable Entity` | Validation failed | Request body doesn't match schema |
+| `500 Internal Server Error` | Server error | Unexpected error (check logs) |
+
+### Common Error Scenarios
+
+**Authentication Errors:**
+```json
+// Invalid credentials
+{"detail": "Invalid email or password"}
+
+// Token expired
+{"detail": "Token has expired"}
+
+// Inactive user
+{"detail": "User account is inactive"}
+```
+
+**Permission Errors:**
+```json
+// Insufficient role
+{"detail": "Only IT Support Manager can approve IT requests"}
+
+// Not the owner
+{"detail": "Cannot update another user's request"}
+```
+
+**Business Rule Errors:**
+```json
+// Invalid state transition
+{"detail": "Cannot approve request with status REJECTED"}
+
+// Duplicate action
+{"detail": "Already have active parking"}
+
+// Resource unavailable
+{"detail": "No available parking slots"}
+```
+
+**Validation Errors:**
+```json
+{
+  "detail": [
+    {
+      "loc": ["body", "description"],
+      "msg": "String should have at least 10 characters",
+      "type": "string_too_short"
+    }
+  ]
+}
+```
+
+---
+
+## Development Notes
+
+### Adding New Features
+
+1. **Create Model** in `app/models/` with SQLAlchemy ORM
+2. **Create Schemas** in `app/schemas/` with Pydantic
+3. **Create Service** in `app/services/` for business logic
+4. **Create Endpoints** in `app/api/v1/endpoints/`
+5. **Register Router** in `app/api/v1/router.py`
+6. **Create Migration** with `alembic revision --autogenerate`
+
+### Async Best Practices
+
+```python
+# Always use selectinload for relationships in async context
+from sqlalchemy.orm import selectinload
+
+result = await db.execute(
+    select(Model).options(
+        selectinload(Model.relationship1),
+        selectinload(Model.relationship2)
+    )
+)
+
+# After commit, reload with relationships (not just refresh)
+await db.commit()
+result = await db.execute(
+    select(Model).where(Model.id == id).options(
+        selectinload(Model.relationship)
+    )
+)
+model = result.scalar_one()
+```
+
+### Response Helpers
+
+```python
+from app.utils.response import create_response, create_paginated_response
+
+# Standard response
+return create_response(
+    data={"key": "value"},
+    message="Operation successful"
+)
+
+# Paginated response
+return create_paginated_response(
+    data=items,
+    total=total_count,
+    page=page,
+    page_size=page_size,
+    message="Items retrieved"
+)
+```
+
+---
+
+## Changelog
+
+### Version 1.0.0 (February 2026)
+
+**Features:**
+- Complete office management system with 12 modules
+- Role-based access control with 5-tier hierarchy
+- JWT authentication with refresh tokens
+- Semantic search using sentence transformers
+- Docker containerization
+
+**IT Requests Module:**
+- Simplified workflow: Create → Approve/Reject
+- Full user name resolution in responses
+- Relationship loading with selectinload for async safety
+- Support for related asset linking
+
+**Technical Improvements:**
+- Async-first architecture with SQLAlchemy 2.0
+- Proper relationship loading to avoid MissingGreenlet errors
+- Consistent response formatting across all endpoints
+- Comprehensive error handling
 
 ---
 
